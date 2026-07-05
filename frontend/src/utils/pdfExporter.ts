@@ -262,6 +262,25 @@ export async function exportToPdf(
       pdf.setDrawColor(0, 0, 0);
       pdf.setLineWidth(0.25);
       pdf.rect(MARGIN_MM, MARGIN_MM, CONTENT_W_MM, imgHeightMm + GAP_MM * 2, 'S');
+
+      // Draw table vertical column divider (x = 69mm) if this page contains table content
+      const tableBottomPx = trs.length > 0
+        ? Math.round(Math.max(...trs.map(tr => tr.getBoundingClientRect().bottom - elementRect.top)) * SCALE)
+        : 0;
+
+      if (offsetY < tableBottomPx) {
+        const tableEndOnPagePx = Math.min(actualCut, tableBottomPx);
+        const yEndMm = tableBottomPx > actualCut
+          ? (MARGIN_MM + imgHeightMm + GAP_MM * 2)
+          : (placementY + ((tableEndOnPagePx - offsetY) / canvasW) * CONTENT_W_MM);
+
+        pdf.line(
+          MARGIN_MM + CONTENT_W_MM * 0.3, // x = 69 mm
+          MARGIN_MM,                     // start at top border (15mm)
+          MARGIN_MM + CONTENT_W_MM * 0.3, 
+          yEndMm                         // end at bottom page border or table end
+        );
+      }
     }
 
     offsetY += sliceH;
