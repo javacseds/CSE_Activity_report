@@ -8,14 +8,14 @@
       "entrypoint": "server.js"
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "backend"
+      "source": "/api/(.*)",
+      "destination": { "service": "backend" }
     },
     {
-      "src": "/(.*)",
-      "dest": "frontend"
+      "source": "/(.*)",
+      "destination": { "service": "frontend" }
     }
   ]
 }
