@@ -30,6 +30,28 @@ const ReportSchema = new mongoose.Schema({
     border: { type: String, default: 'none' },
     borderRadius: { type: Number, default: 0 }
   },
+  headerStyles: {
+    fontFamily: { type: String, default: 'Times New Roman' },
+    fontSize: { type: Number, default: 12 },
+    color: { type: String, default: '#000000' },
+    bold: { type: Boolean, default: true },
+    italic: { type: Boolean, default: false },
+    underline: { type: Boolean, default: false },
+    align: { type: String, default: 'center' },
+    backgroundColor: { type: String, default: '#ffffff' },
+    height: { type: Number, default: 60 },
+    spacing: { type: Number, default: 15 },
+    showBorder: { type: Boolean, default: true },
+    visible: { type: Boolean, default: true },
+    institutionName: { type: String, default: "St. Joseph's Engineering College" }
+  },
+  imageConfig: {
+    layoutType: { type: String, default: 'grid' },
+    columns: { type: Number, default: 2 },
+    aspectRatio: { type: String, default: 'maintain' },
+    maxPerPage: { type: Number, default: 4 },
+    alignment: { type: String, default: 'center' }
+  },
   logos: [{
     id: String,
     src: String, // base64 or url

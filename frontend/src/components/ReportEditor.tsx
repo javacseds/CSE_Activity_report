@@ -56,6 +56,28 @@ interface ReportData {
     border?: string;
     borderRadius?: number;
   };
+  headerStyles?: {
+    fontFamily: string;
+    fontSize: number;
+    color: string;
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    align: 'left' | 'center' | 'right' | 'justify';
+    backgroundColor: string;
+    height: number;
+    spacing: number;
+    showBorder: boolean;
+    visible: boolean;
+    institutionName: string;
+  };
+  imageConfig?: {
+    layoutType: 'grid' | 'custom';
+    columns: number;
+    aspectRatio: 'maintain' | 'crop';
+    maxPerPage: number;
+    alignment: 'left' | 'center' | 'right';
+  };
   logos: Logo[];
   infoTable?: {
     rows: Array<{
@@ -534,6 +556,46 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
     });
   };
 
+  const handleHeaderStyleChange = (key: string, val: any) => {
+    onChange({
+      ...reportData,
+      headerStyles: {
+        ...(reportData.headerStyles || {
+          fontFamily: 'Times New Roman',
+          fontSize: 12,
+          color: '#000000',
+          bold: true,
+          italic: false,
+          underline: false,
+          align: 'center',
+          backgroundColor: '#ffffff',
+          height: 60,
+          spacing: 15,
+          showBorder: true,
+          visible: true,
+          institutionName: 'GOUTHAMI'
+        }),
+        [key]: val
+      }
+    });
+  };
+
+  const handleImageConfigChange = (key: string, val: any) => {
+    onChange({
+      ...reportData,
+      imageConfig: {
+        ...(reportData.imageConfig || {
+          layoutType: 'grid',
+          columns: 2,
+          aspectRatio: 'maintain',
+          maxPerPage: 4,
+          alignment: 'center'
+        }),
+        [key]: val
+      }
+    });
+  };
+
   const handleSnapshotSave = async () => {
     if (!snapshotMsg.trim()) return;
     await onSave(true, snapshotMsg.trim());
@@ -714,6 +776,102 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+            
+            {/* Header Styling Panel */}
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+              <h3 className="text-sm font-bold text-slate-850 dark:text-white mb-3">Institutional Header Layout</h3>
+              
+              <div className="p-4 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-950 rounded-xl space-y-4 shadow-sm">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="col-span-2">
+                    <label className="block text-slate-450 mb-0.5">Institution Title Text</label>
+                    <input
+                      type="text"
+                      value={reportData.headerStyles?.institutionName || ''}
+                      onChange={(e) => handleHeaderStyleChange('institutionName', e.target.value)}
+                      placeholder="e.g. GOUTHAMI"
+                      className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-800 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-450 mb-0.5">Font Family</label>
+                    <select
+                      value={reportData.headerStyles?.fontFamily || 'Times New Roman'}
+                      onChange={(e) => handleHeaderStyleChange('fontFamily', e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-800 dark:text-white"
+                    >
+                      <option value="Times New Roman">Times New Roman</option>
+                      <option value="Arial">Arial</option>
+                      <option value="Georgia">Georgia</option>
+                      <option value="Outfit">Outfit</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-450 mb-0.5">Font Size (pt)</label>
+                    <input
+                      type="number"
+                      min="8"
+                      max="24"
+                      value={reportData.headerStyles?.fontSize || 12}
+                      onChange={(e) => handleHeaderStyleChange('fontSize', parseInt(e.target.value) || 12)}
+                      className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-850 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-450 mb-0.5">Text Color</label>
+                    <input
+                      type="color"
+                      value={reportData.headerStyles?.color || '#000000'}
+                      onChange={(e) => handleHeaderStyleChange('color', e.target.value)}
+                      className="w-full h-8 p-0 bg-transparent cursor-pointer rounded border border-slate-350"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-450 mb-0.5">Alignment</label>
+                    <select
+                      value={reportData.headerStyles?.align || 'center'}
+                      onChange={(e) => handleHeaderStyleChange('align', e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-800 dark:text-white"
+                    >
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-450 mb-0.5">Spacing Bottom (px)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={reportData.headerStyles?.spacing || 15}
+                      onChange={(e) => handleHeaderStyleChange('spacing', parseInt(e.target.value) || 0)}
+                      className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-850 dark:text-white"
+                    />
+                  </div>
+                  <div className="flex items-center gap-4 col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <label className="flex items-center gap-1.5 font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={reportData.headerStyles?.visible !== false}
+                        onChange={(e) => handleHeaderStyleChange('visible', e.target.checked)}
+                        className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 border-slate-300"
+                      />
+                      <span>Show Header</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={reportData.headerStyles?.showBorder !== false}
+                        onChange={(e) => handleHeaderStyleChange('showBorder', e.target.checked)}
+                        className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 border-slate-300"
+                      />
+                      <span>Show Divider Line</span>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1182,6 +1340,37 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
               <span className="text-[10px] text-slate-400 font-semibold">{reportData.fields.length} Columns</span>
             </div>
 
+            {/* Section Ordering Quick View */}
+            <div className="p-4 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-950 rounded-xl space-y-3 shadow-sm">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-350 block">Section Flow Management (Document Structure)</span>
+              <p className="text-[10px] text-slate-450">Reorder major document sections instantly using the Up and Down arrows below. Changes update the preview sheet flow in real time.</p>
+              <div className="space-y-1.5 pt-1">
+                {[...reportData.fields].sort((a, b) => a.order - b.order).map((field, idx, arr) => (
+                  <div key={field.id} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800 text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{field.heading}</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveField(idx, 'up')}
+                        disabled={idx === 0}
+                        className="p-1 text-slate-450 hover:text-blue-600 disabled:opacity-30 transition"
+                      >
+                        <ArrowUp size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveField(idx, 'down')}
+                        disabled={idx === arr.length - 1}
+                        className="p-1 text-slate-450 hover:text-blue-600 disabled:opacity-30 transition"
+                      >
+                        <ArrowDown size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Custom Field Adder */}
             <div className="flex gap-2">
               <input
@@ -1275,6 +1464,58 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
               <h3 className="text-sm font-bold text-slate-850 dark:text-white mb-2">Upload Activity Photographs</h3>
               <p className="text-xs text-slate-400 mb-4">Upload PNG, JPG, or WEBP images. Images will be optimized and resized client-side to maintain system speed.</p>
               
+              {/* Image Grid Configurations */}
+              <div className="p-4 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-950 rounded-xl space-y-4 shadow-sm mb-4">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-350 border-b pb-1">Photographs Layout Grid Settings</h4>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-slate-450 mb-0.5">Layout Type</label>
+                    <select
+                      value={reportData.imageConfig?.layoutType || 'grid'}
+                      onChange={(e) => handleImageConfigChange('layoutType', e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-800 dark:text-white"
+                    >
+                      <option value="grid">Automatic Grid</option>
+                      <option value="custom">Custom Alignment</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-450 mb-0.5">Grid Columns</label>
+                    <select
+                      value={reportData.imageConfig?.columns || 2}
+                      onChange={(e) => handleImageConfigChange('columns', parseInt(e.target.value) || 2)}
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-800 dark:text-white"
+                    >
+                      <option value="1">1 Column (Large)</option>
+                      <option value="2">2 Columns (2×2)</option>
+                      <option value="3">3 Columns (3×3)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-450 mb-0.5">Aspect Ratio</label>
+                    <select
+                      value={reportData.imageConfig?.aspectRatio || 'maintain'}
+                      onChange={(e) => handleImageConfigChange('aspectRatio', e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-800 dark:text-white"
+                    >
+                      <option value="maintain">Maintain Aspect Ratio</option>
+                      <option value="crop">Crop to Square</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-450 mb-0.5">Image Max Per Page</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={reportData.imageConfig?.maxPerPage || 4}
+                      onChange={(e) => handleImageConfigChange('maxPerPage', parseInt(e.target.value) || 4)}
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-800 dark:text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-350 hover:border-blue-500 rounded-xl cursor-pointer text-slate-400 hover:text-blue-500 bg-white dark:bg-slate-950 transition">
                 <Upload size={24} />
                 <span className="text-xs mt-2 font-semibold">Select Images to Append</span>

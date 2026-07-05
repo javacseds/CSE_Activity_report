@@ -1,6 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { exportToPdf } from '../utils/pdfExporter';
+import {
+  MARGIN_MM,
+  GAP_MM,
+  CONTENT_W_MM,
+  BORDER_H_MM,
+  USABLE_H_MM,
+  CONTENT_W_PX,
+  SCALE
+} from '../utils/pagination';
+import type { Boundary } from '../utils/pagination';
 
 interface Logo {
   id: string;
@@ -51,6 +61,28 @@ interface ReportData {
     padding?: number;
     border?: string;
     borderRadius?: number;
+  };
+  headerStyles?: {
+    fontFamily: string;
+    fontSize: number;
+    color: string;
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    align: 'left' | 'center' | 'right' | 'justify';
+    backgroundColor: string;
+    height: number;
+    spacing: number;
+    showBorder: boolean;
+    visible: boolean;
+    institutionName: string;
+  };
+  imageConfig?: {
+    layoutType: 'grid' | 'custom';
+    columns: number;
+    aspectRatio: 'maintain' | 'crop';
+    maxPerPage: number;
+    alignment: 'left' | 'center' | 'right';
   };
   logos: Logo[];
   infoTable?: {
@@ -103,8 +135,101 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({
   zoom,
   setZoom,
 }) => {
-  const { title, titleStyles, logos, fields, photos, signatures, footer } = reportData;
+  const { title, fields, footer } = reportData;
   const [pdfStatus, setPdfStatus] = useState<string | null>(null);
+  const [pageSlices, setPageSlices] = useState<Array<{ offsetY: number; sliceH: number }>>([]);
+  const [tableBottomPx, setTableBottomPx] = useState<number>(0);
+
+  // Dynamic pagination double-pass scanner
+  const measureAndSlice = () => {
+    const hiddenEl = document.getElementById('report-hidden-measure');
+    if (!hiddenEl) return;
+
+    const contentHeight = hiddenEl.scrollHeight;
+    const elementRect = hiddenEl.getBoundingClientRect();
+
+    const boundaries: Boundary[] = [];
+    const trs = Array.from(hiddenEl.querySelectorAll('tr'));
+    const paras = Array.from(hiddenEl.querySelectorAll('.report-table-description p, .report-table-description li'));
+    const imgs = Array.from(hiddenEl.querySelectorAll('.photo-gallery-grid img, .photo-gallery-grid div.flex'));
+    const sigs = Array.from(hiddenEl.querySelectorAll('.signatures-section-container, .signature-block-container'));
+
+    const addBoundary = (elements: Element[], isUnsplittable = false) => {
+      elements.forEach(item => {
+        const r = item.getBoundingClientRect();
+        const relativeTop = r.top - elementRect.top;
+        const relativeBottom = r.bottom - elementRect.top;
+        boundaries.push({
+          top: Math.round(relativeTop),
+          bottom: Math.round(relativeBottom),
+          isUnsplittable
+        });
+      });
+    };
+
+    addBoundary(trs, false);
+    addBoundary(paras, false);
+    addBoundary(imgs, true);
+    addBoundary(sigs, true);
+
+    boundaries.sort((a, b) => a.top - b.top);
+
+    // Calculate table bottom limit for column divider line
+    const calculatedTableBottom = trs.length > 0
+      ? Math.max(...trs.map(tr => tr.getBoundingClientRect().bottom - elementRect.top))
+      : 0;
+    setTableBottomPx(calculatedTableBottom);
+
+    // mm-to-pixel ratio
+    const pxPerMm = hiddenEl.offsetWidth / CONTENT_W_MM;
+    const page1MaxHPx = BORDER_H_MM * pxPerMm;
+    const otherMaxHPx = USABLE_H_MM * pxPerMm;
+
+    const slices: Array<{ offsetY: number; sliceH: number }> = [];
+    let currentOffsetY = 0;
+    const maxH = contentHeight;
+
+    while (currentOffsetY < maxH) {
+      const isFirstPage = slices.length === 0;
+      const pageHPx = isFirstPage ? page1MaxHPx : otherMaxHPx;
+
+      if (currentOffsetY + pageHPx >= maxH) {
+        slices.push({ offsetY: currentOffsetY, sliceH: maxH - currentOffsetY });
+        break;
+      }
+
+      const candidateCut = currentOffsetY + pageHPx;
+      let bestCut = candidateCut;
+
+      const minAllowedCut = candidateCut - (300 / SCALE); // Scan back 150px in 1x scale
+      const crossing = boundaries.filter(b => b.top < candidateCut && b.bottom > candidateCut);
+
+      if (crossing.length > 0) {
+        crossing.sort((a, b) => (a.bottom - a.top) - (b.bottom - b.top));
+        for (const block of crossing) {
+          const targetCut = block.top - 2;
+          if (block.isUnsplittable || targetCut >= minAllowedCut) {
+            if (targetCut > currentOffsetY) {
+              bestCut = targetCut;
+              break;
+            }
+          }
+        }
+      }
+
+      slices.push({ offsetY: currentOffsetY, sliceH: bestCut - currentOffsetY });
+      currentOffsetY = bestCut;
+    }
+
+    setPageSlices(slices);
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      measureAndSlice();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [reportData]);
 
   const handleDownloadPdf = async () => {
     const emptyRequiredFields = fields.filter(
@@ -127,37 +252,6 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({
     }
   };
 
-  const isGouthami = logos && logos.some(l => l.id === 'gouthami' || l.label.toLowerCase().includes('gouthami') || l.label.toLowerCase().includes('gitamw'));
-
-  // Generate dynamic font style string
-  const getTitleStyles = () => {
-    return {
-      fontFamily: titleStyles.fontFamily || 'Times New Roman',
-      fontSize: `${titleStyles.fontSize || 24}px`,
-      color: titleStyles.color || '#000000',
-      fontWeight: titleStyles.bold ? 'bold' : 'normal',
-      fontStyle: titleStyles.italic ? 'italic' : 'normal',
-      textDecoration: titleStyles.underline ? 'underline' : 'none',
-      textAlign: titleStyles.align || 'center',
-      backgroundColor: titleStyles.backgroundColor || 'transparent',
-      padding: `${titleStyles.padding !== undefined ? titleStyles.padding : 10}px`,
-      borderRadius: `${titleStyles.borderRadius || 0}px`,
-      letterSpacing: `${titleStyles.letterSpacing || 0}px`,
-      lineHeight: titleStyles.lineSpacing || 1.2,
-      border: titleStyles.border || 'none',
-      textTransform: (titleStyles.textCase === 'uppercase' ? 'uppercase' : (titleStyles.textCase === 'lowercase' ? 'lowercase' : (titleStyles.textCase === 'capitalize' ? 'capitalize' : 'none'))) as any
-    };
-  };
-
-  // Sort components by order
-  const sortedFields = [...fields].sort((a, b) => a.order - b.order);
-  const sortedPhotos = [...photos].sort((a, b) => a.order - b.order);
-  const sortedSignatures = [...signatures].sort((a, b) => a.order - b.order);
-
-  // Group visible logos (left side, right side, etc.)
-  const visibleLogos = logos.filter(l => l.visible && l.src);
-
-  // Determine scaling class
   const getZoomClass = () => {
     if (zoom === 75) return 'scale-75 origin-top';
     if (zoom === 90) return 'scale-90 origin-top';
@@ -168,10 +262,11 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-slate-100 dark:bg-slate-900 print:bg-transparent print:h-auto print:border-none border-l border-slate-200 dark:border-slate-800 transition-colors duration-150">
-      {/* Zoom and Action Bar (no-print) */}
-      <div className="no-print flex items-center justify-between p-3 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm z-10 text-slate-700 dark:text-slate-300">
+      
+      {/* Zoom and Action Bar */}
+      <div className="no-print flex items-center justify-between p-3 bg-white dark:bg-slate-955 border-b border-slate-200 dark:border-slate-800 shadow-sm z-10 text-slate-705 dark:text-slate-300">
         <div className="flex items-center gap-1">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-450 mr-2">Live Preview</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 mr-2">Live Preview</span>
           <button
             onClick={() => setZoom(Math.max(75, zoom - 15))}
             className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition"
@@ -195,333 +290,432 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({
           onClick={handleDownloadPdf}
           disabled={!!pdfStatus}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-xs font-medium transition shadow-sm"
-          title="Download full multi-page PDF"
         >
           <Download size={14} />
           <span>{pdfStatus ? pdfStatus : 'Download PDF'}</span>
         </button>
       </div>
 
-      {/* Preview Scroll Canvas */}
-      <div className="flex-1 overflow-auto print:overflow-visible p-6 print:p-0 flex justify-center print:block items-start print:h-auto">
+      {/* Hidden layout measurement container */}
+      <div 
+        id="report-hidden-measure" 
+        style={{ 
+          position: 'absolute', 
+          left: '-9999px', 
+          top: '-9999px', 
+          width: `${CONTENT_W_PX}px`,
+          opacity: 0,
+          pointerEvents: 'none'
+        }}
+      >
+        <ReportContent reportData={reportData} isMeasure={true} />
+      </div>
+
+      {/* Visible paginated document cards */}
+      <div className="flex-1 overflow-auto p-6 flex flex-col items-center print:block print:p-0 print:h-auto">
         <div className={`transition-all duration-200 ${getZoomClass()} print:transform-none print:w-full print:h-auto print:static`}>
-          {/* Main A4 Document Sheet */}
-          <div className="a4-page relative flex flex-col justify-between print:block" id="report-a4-document">
-            <div>
-              {/* Document Header Section */}
-              <div className="border-b-2 border-black pb-4 mb-4">
-                {isGouthami ? (
-                  <div className="space-y-3">
-                    {/* Top Row: Innovation Icons Banner Container */}
-                    <div className="border border-slate-300 rounded-lg p-2 flex justify-around items-center bg-white shadow-sm">
-                      {/* MoE's Innovation Cell */}
-                      <div className="flex items-center gap-1.5 text-[6pt] font-bold leading-tight uppercase w-1/4 border-r border-slate-200 pr-2">
-                        {logos.find(l => l.id === 'moe')?.src && (
-                          <img src={logos.find(l => l.id === 'moe')?.src} className="h-7 w-7 object-contain" alt="MoE" />
-                        )}
-                        <div>
-                          <p className="text-slate-900">MoE's</p>
-                          <p className="text-red-655 font-bold">INNOVATION CELL</p>
-                          <p className="text-slate-500 text-[5pt] font-semibold">(GOVERNMENT OF INDIA)</p>
-                        </div>
-                      </div>
+          
+          {pageSlices.length === 0 ? (
+            <div className="a4-page relative flex flex-col justify-between" id="report-a4-document" style={{ width: '210mm', height: '297mm', padding: '15mm', border: '1px solid #e2e8f0', background: '#ffffff' }}>
+              <ReportContent reportData={reportData} />
+            </div>
+          ) : (
+            pageSlices.map((slice, index) => {
+              const pageNum = index + 1;
+              const isFirstPage = index === 0;
+              
+              const hiddenEl = document.getElementById('report-hidden-measure');
+              const pxPerMm = hiddenEl ? (hiddenEl.offsetWidth / CONTENT_W_MM) : 3.7795;
+              
+              const sliceHMm = slice.sliceH / pxPerMm;
+              const offsetYMm = slice.offsetY / pxPerMm;
+              const totalPages = pageSlices.length;
 
-                      {/* Ministry of Education */}
-                      <div className="flex items-center gap-1.5 text-[6.5pt] font-bold leading-tight uppercase w-1/4 border-r border-slate-200 px-2 justify-center">
-                        {logos.find(l => l.id === 'gouthami')?.src && (
-                          <img src={logos.find(l => l.id === 'gouthami')?.src} className="h-6 w-6 object-contain" alt="GITAMW" />
-                        )}
-                        <div>
-                          <p className="text-slate-900">Ministry of Education</p>
-                          <p className="text-slate-500 text-[5pt] font-semibold">Government of India</p>
-                        </div>
-                      </div>
+              const maxHPx = isFirstPage ? (BORDER_H_MM * pxPerMm) : (USABLE_H_MM * pxPerMm);
+              const remainingSpacePercent = Math.max(0, Math.round(((maxHPx - slice.sliceH) / maxHPx) * 100));
 
-                      {/* AICTE */}
-                      <div className="flex items-center gap-1.5 text-[7pt] font-bold leading-tight w-1/5 border-r border-slate-200 px-2 justify-center">
-                        {logos.find(l => l.id === 'aicte')?.src && (
-                          <img src={logos.find(l => l.id === 'aicte')?.src} className="h-6 w-6 object-contain" alt="AICTE" />
-                        )}
-                        <span className="text-amber-700 font-bold select-none">AICTE</span>
-                      </div>
+              // Determine where the vertical divider line should stop
+              const sliceEndOffsetY = slice.offsetY + slice.sliceH;
+              const tableEndOnPagePx = Math.min(sliceEndOffsetY, tableBottomPx);
+              const tableEndOnPageMm = ((tableEndOnPagePx - slice.offsetY) / pxPerMm);
+              const yEndMm = tableBottomPx > sliceEndOffsetY
+                ? (MARGIN_MM + sliceHMm + GAP_MM * 2)
+                : (isFirstPage ? MARGIN_MM : (MARGIN_MM + GAP_MM)) + tableEndOnPageMm;
 
-                      {/* Institution's Innovation Council */}
-                      <div className="flex items-center gap-1.5 text-[6.5pt] font-bold leading-tight uppercase w-1/4 pl-2">
-                        {logos.find(l => l.id === 'iic')?.src && (
-                          <img src={logos.find(l => l.id === 'iic')?.src} className="h-7 w-7 object-contain" alt="IIC" />
-                        )}
-                        <div>
-                          <p className="text-blue-700">INSTITUTION'S</p>
-                          <p className="text-blue-700">INNOVATION</p>
-                          <p className="text-blue-700 text-[5.5pt] font-semibold">COUNCIL</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Bottom Row: College Name & Affiliations */}
-                    <div className="flex items-center justify-between gap-3 mt-2 text-left">
-                      {/* Left: Gouthami Logo */}
-                      <div className="w-[60px] h-[60px] flex-shrink-0 flex items-center justify-center border border-purple-200 rounded-full p-1 bg-white">
-                        {logos.find(l => l.id === 'gouthami')?.src ? (
-                          <img src={logos.find(l => l.id === 'gouthami')?.src} className="max-w-full max-h-full object-contain" alt="Gouthami Logo" />
-                        ) : (
-                          <span className="text-xs font-bold text-purple-800 uppercase">GITAMW</span>
-                        )}
-                      </div>
-
-                      {/* Middle: College Titles */}
-                      <div className="flex-1 text-center select-text">
-                        <h1 className="text-[12pt] font-bold uppercase leading-tight tracking-normal text-purple-900 font-sans">
-                          GOUTHAMI
-                        </h1>
-                        <p className="text-[7.5pt] font-bold text-slate-700 uppercase leading-none">
-                          Institute of Technology and Management for Women
-                        </p>
-                        <p className="text-[8pt] text-purple-700 font-bold uppercase tracking-wider mt-1 select-none">
-                          ★ AUTONOMOUS ★
-                        </p>
-                      </div>
-
-                      {/* Right: Affiliations Small Text */}
-                      <div className="w-[35%] text-[6.5pt] leading-tight text-slate-700 select-text border-l border-slate-205 pl-2">
-                        <p className="font-bold">Approved by AICTE, New Delhi</p>
-                        <p className="font-bold">Affiliated to JNTUA, Ananthapuramu</p>
-                        <p className="font-bold">Accredited by NAAC with B++ Grade</p>
-                        <p>Recognised under UGC 2(f) Act. 1956</p>
-                        <p className="text-slate-500">Sai Nagar, Peddasettypalli(V), Proddatur</p>
-                        <p className="text-slate-500">YSR Kadapa Dist., A.P - 516360</p>
-                      </div>
-                    </div>
+              return (
+                <div key={index} className="flex flex-col items-center gap-2 mb-8 no-print select-none a4-page-card">
+                  {/* Page Status Bar */}
+                  <div className="w-[210mm] flex justify-between items-center text-[10px] text-slate-500 font-semibold px-2">
+                    <span>Page {pageNum} of {totalPages}</span>
+                    <span className={remainingSpacePercent < 15 ? "text-red-500 font-bold" : "text-green-600"}>
+                      {remainingSpacePercent}% space remaining
+                    </span>
                   </div>
-                ) : (
-                  <div>
-                    {/* Fallback to Standard SJEC Header layout */}
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex flex-wrap items-center justify-center gap-3 w-full">
-                        {visibleLogos.map((logo) => (
-                          <div key={logo.id} className="flex flex-col items-center max-w-[65px] text-center">
-                            <div className="w-[50px] h-[50px] flex items-center justify-center border border-slate-300 rounded overflow-hidden p-0.5 bg-white">
-                              <img
-                                src={logo.src}
-                                alt={logo.label}
-                                className="max-w-full max-h-full object-contain"
-                              />
-                            </div>
-                            <span className="text-[7pt] mt-0.5 font-bold uppercase leading-tight select-none">{logo.label}</span>
-                          </div>
-                        ))}
+
+                  {/* A4 Sheet Card */}
+                  <div 
+                    className="relative bg-white text-black shadow-lg box-border font-serif select-text"
+                    style={{
+                      width: '210mm',
+                      height: '297mm',
+                      padding: '15mm',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'flex-start',
+                      border: '1px solid #cbd5e1',
+                      position: 'relative'
+                    }}
+                  >
+                    {/* Page outer border box for Page 2+ */}
+                    {!isFirstPage && (
+                      <div 
+                        className="absolute pointer-events-none"
+                        style={{
+                          top: '15mm',
+                          left: '15mm',
+                          width: `${CONTENT_W_MM}mm`,
+                          height: `${sliceHMm + GAP_MM * 2}mm`,
+                          border: '0.25mm solid #000000',
+                          zIndex: 10
+                        }}
+                      />
+                    )}
+
+                    {/* Column Divider Line for Page 2+ tables */}
+                    {!isFirstPage && slice.offsetY < tableBottomPx && (
+                      <div 
+                        className="absolute bg-black pointer-events-none"
+                        style={{
+                          left: '69mm', // 15mm left margin + 180mm * 0.3 = 69mm
+                          top: '15mm',  // starts at top border (15mm)
+                          width: '0.25mm',
+                          height: `${yEndMm - 15}mm`,
+                          zIndex: 12
+                        }}
+                      />
+                    )}
+
+                    {/* Content slice viewport */}
+                    <div 
+                      style={{
+                        width: `${CONTENT_W_MM}mm`,
+                        height: `${sliceHMm}mm`,
+                        overflow: 'hidden',
+                        position: 'relative',
+                        marginTop: isFirstPage ? 0 : `${GAP_MM}mm`,
+                        background: '#ffffff',
+                        zIndex: 1
+                      }}
+                    >
+                      <div 
+                        style={{
+                          position: 'absolute',
+                          top: `-${offsetYMm}mm`,
+                          left: 0,
+                          width: `${CONTENT_W_MM}mm`
+                        }}
+                      >
+                        <ReportContent reportData={reportData} />
                       </div>
                     </div>
 
-                    <div className="text-center mt-3 select-text">
-                      <h1 className="text-[13pt] font-bold uppercase leading-normal tracking-wide">
-                        St. Joseph's Engineering College
-                      </h1>
-                      <p className="text-[8.5pt] italic text-slate-700">
-                        An Autonomous Institution affiliated to VTU, Belagavi | Approved by AICTE, New Delhi
-                      </p>
-                      <p className="text-[8.5pt] text-slate-700">
-                        Accredited by NAAC with 'A+' Grade & NBA (CSE, ECE, ME, EEE)
-                      </p>
-                      <p className="text-[8.5pt] font-semibold text-slate-700">
-                        Vamanjoor, Mangaluru - 575028, Karnataka, India
-                      </p>
-                      <p className="text-[8pt] text-slate-500">
-                        Website: www.sjec.ac.in | Email: sjec@sjec.ac.in | Tel: +91 824 2263753
-                      </p>
-                    </div>
+                    {/* Page Footer */}
+                    {footer.visible !== false && (
+                      <PageFooter 
+                        footer={footer} 
+                        pageNum={pageNum} 
+                        totalPages={totalPages} 
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Sub-component: Continuous Report Content Layout ───────────────────────────
+const ReportContent: React.FC<{ reportData: ReportData; isMeasure?: boolean }> = ({ reportData, isMeasure = false }) => {
+  const { title, titleStyles, logos, fields, photos, signatures, headerStyles, imageConfig } = reportData;
+
+  const isGouthami = logos && logos.some(l => l.id === 'gouthami' || l.label.toLowerCase().includes('gouthami') || l.label.toLowerCase().includes('gitamw'));
+
+  const getTitleStyles = () => {
+    return {
+      fontFamily: titleStyles.fontFamily || 'Times New Roman',
+      fontSize: `${titleStyles.fontSize || 24}px`,
+      color: titleStyles.color || '#000000',
+      fontWeight: titleStyles.bold ? 'bold' : 'normal',
+      fontStyle: titleStyles.italic ? 'italic' : 'normal',
+      textDecoration: titleStyles.underline ? 'underline' : 'none',
+      textAlign: titleStyles.align || 'center',
+      backgroundColor: titleStyles.backgroundColor || 'transparent',
+      padding: `${titleStyles.padding !== undefined ? titleStyles.padding : 10}px`,
+      borderRadius: `${titleStyles.borderRadius || 0}px`,
+      letterSpacing: `${titleStyles.letterSpacing || 0}px`,
+      lineHeight: titleStyles.lineSpacing || 1.2,
+      border: titleStyles.border || 'none',
+      textTransform: (titleStyles.textCase === 'uppercase' ? 'uppercase' : (titleStyles.textCase === 'lowercase' ? 'lowercase' : (titleStyles.textCase === 'capitalize' ? 'capitalize' : 'none'))) as any
+    };
+  };
+
+  const sortedFields = [...fields].sort((a, b) => a.order - b.order);
+  const sortedPhotos = [...photos].sort((a, b) => a.order - b.order);
+  const sortedSignatures = [...signatures].sort((a, b) => a.order - b.order);
+  const visibleLogos = logos.filter(l => l.visible && l.src);
+
+  // Dynamic Image Arrangement grid columns (1, 2, or 3)
+  const cols = imageConfig?.columns || 2;
+  const gridClass = cols === 1 
+    ? 'grid-cols-1' 
+    : cols === 3 
+      ? 'grid-cols-3' 
+      : 'grid-cols-2';
+
+  return (
+    <div className="select-text w-[180mm] bg-white text-black font-serif text-[12pt] leading-[1.5]" style={{ boxSizing: 'border-box' }}>
+      
+      {/* 1. Dynamic Header */}
+      {headerStyles?.visible !== false && (
+        <div 
+          className="pb-4 mb-4 select-text" 
+          style={{
+            borderBottom: headerStyles?.showBorder !== false ? '2px solid #000000' : 'none',
+            marginBottom: `${headerStyles?.spacing !== undefined ? headerStyles.spacing : 15}px`,
+            backgroundColor: headerStyles?.backgroundColor || 'transparent'
+          }}
+        >
+          <div className="flex flex-wrap items-center justify-center gap-3 w-full mb-3 select-none">
+            {visibleLogos.map((logo) => (
+              <div key={logo.id} className="flex flex-col items-center max-w-[65px] text-center">
+                <div className="w-[50px] h-[50px] flex items-center justify-center border border-slate-300 rounded overflow-hidden p-0.5 bg-white">
+                  <img
+                    src={logo.src}
+                    alt={logo.label}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+                <span className="text-[7pt] mt-0.5 font-bold uppercase leading-tight select-none">{logo.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <div 
+            style={{
+              textAlign: headerStyles?.align || 'center',
+              fontFamily: headerStyles?.fontFamily || 'Times New Roman',
+              fontSize: `${headerStyles?.fontSize || 12}pt`,
+              color: headerStyles?.color || '#000000',
+              fontWeight: headerStyles?.bold !== false ? 'bold' : 'normal',
+              fontStyle: headerStyles?.italic ? 'italic' : 'normal',
+              textDecoration: headerStyles?.underline ? 'underline' : 'none',
+            }}
+          >
+            <h1 className="uppercase leading-normal tracking-wide m-0">
+              {headerStyles?.institutionName || 'GOUTHAMI'}
+            </h1>
+            {(!headerStyles?.institutionName || headerStyles.institutionName === 'GOUTHAMI') && isGouthami && (
+              <>
+                <p className="text-[7.5pt] font-bold text-slate-700 uppercase leading-none mt-1">
+                  Institute of Technology and Management for Women
+                </p>
+                <p className="text-[8pt] text-purple-750 font-bold uppercase tracking-wider mt-1 select-none">
+                  ★ AUTONOMOUS ★
+                </p>
+              </>
+            )}
+            {(!headerStyles?.institutionName || headerStyles.institutionName.includes("Joseph")) && !isGouthami && (
+              <>
+                <p className="text-[8.5pt] italic text-slate-750 m-0 mt-1">
+                  An Autonomous Institution affiliated to VTU, Belagavi | Approved by AICTE, New Delhi
+                </p>
+                <p className="text-[8.5pt] text-slate-755 m-0">
+                  Accredited by NAAC with 'A+' Grade & NBA (CSE, ECE, ME, EEE)
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 2. Title Section */}
+      {title && (
+        <div className="pb-4 select-text">
+          <h2 style={getTitleStyles() as any}>{title}</h2>
+        </div>
+      )}
+
+      {/* 3. Predefined Information Table */}
+      {reportData.infoTable && reportData.infoTable.rows.some(r => r.visible) && (
+        <div className="mb-6 select-text">
+          <table 
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontFamily: reportData.infoTable.styles.fontFamily || 'Times New Roman',
+              fontSize: `${reportData.infoTable.styles.fontSize || 11}pt`,
+              border: reportData.infoTable.styles.showBorder ? `${reportData.infoTable.styles.borderThickness || 1}px solid #000000` : 'none'
+            }}
+          >
+            <tbody>
+              {reportData.infoTable.rows
+                .filter(row => row.visible)
+                .sort((a, b) => a.order - b.order)
+                .map((row, index) => (
+                  <tr 
+                    key={row.id} 
+                    style={{
+                      backgroundColor: index % 2 === 1 ? reportData.infoTable!.styles.alternateRowBg : '#ffffff',
+                      borderBottom: reportData.infoTable!.styles.showBorder ? `${reportData.infoTable!.styles.borderThickness || 1}px solid #000000` : 'none',
+                      height: `${reportData.infoTable!.styles.rowHeight || 40}px`
+                    }}
+                  >
+                    <td 
+                      style={{
+                        width: `${reportData.infoTable!.styles.colWidth || 35}%`,
+                        fontWeight: 'bold',
+                        padding: `${reportData.infoTable!.styles.cellPadding || 8}px`,
+                        borderRight: reportData.infoTable!.styles.showBorder ? `${reportData.infoTable!.styles.borderThickness || 1}px solid #000000` : 'none',
+                        verticalAlign: 'top'
+                      }}
+                    >
+                      {row.name}
+                    </td>
+                    <td 
+                      style={{
+                        width: `${100 - (reportData.infoTable!.styles.colWidth || 35)}%`,
+                        padding: `${reportData.infoTable!.styles.cellPadding || 8}px`,
+                        verticalAlign: 'top'
+                      }}
+                    >
+                      {row.value}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 4. Main Details Report Table */}
+      <div className="report-content select-text mb-6">
+        <table className="w-full border-collapse border border-black table-fixed">
+          <tbody>
+            {sortedFields.map((field) => (
+              <tr key={field.id} className="border-t border-black">
+                <td className="report-table-heading font-serif text-[12pt] font-bold w-[30%] border border-black p-2 bg-slate-50/50">
+                  {field.heading}
+                </td>
+                <td className="report-table-description font-serif text-[12pt] text-justify w-[70%] border border-black p-2">
+                  {field.description ? (
+                    <div 
+                      className="rich-text-content leading-relaxed" 
+                      dangerouslySetInnerHTML={{ __html: field.description }} 
+                    />
+                  ) : (
+                    <span className="text-slate-400 italic no-print">(No details entered)</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 5. Photo Gallery Section */}
+      {sortedPhotos.length > 0 && (
+        <div className="mt-8 select-text">
+          <h3 className="font-serif text-[12pt] font-bold uppercase border-b border-black pb-1 mb-4">
+            Photographs & Gallery
+          </h3>
+          <div className={`grid ${gridClass} gap-4 photo-gallery-grid`}>
+            {sortedPhotos.map((photo) => (
+              <div key={photo.id} className="flex flex-col border border-black p-1 bg-white break-inside-avoid">
+                <div className="w-full h-[140px] flex items-center justify-center overflow-hidden bg-slate-50">
+                  <img
+                    src={photo.src}
+                    alt={photo.caption}
+                    className="max-h-full object-contain"
+                    style={{
+                      objectFit: imageConfig?.aspectRatio === 'crop' ? 'cover' : 'contain',
+                      width: '100%',
+                      height: '100%'
+                    }}
+                  />
+                </div>
+                {photo.caption && (
+                  <div className="text-[10pt] font-serif italic text-center mt-1 border-t border-slate-200 pt-1">
+                    {photo.caption}
                   </div>
                 )}
               </div>
-
-              {/* Fixed Activity Report on Title */}
-              <div className="text-center font-serif text-[12pt] font-bold uppercase tracking-wider mb-1 select-text" style={{ fontFamily: titleStyles.fontFamily || 'Times New Roman' }}>
-                Activity Report on
-              </div>
-
-              {/* Report Title */}
-              <div className="mb-6 select-text">
-                <h2 style={getTitleStyles()} className="select-text">
-                  {title}
-                </h2>
-              </div>
-
-              {/* Report Information Table */}
-              {reportData.infoTable && reportData.infoTable.rows && (
-                <div className="mb-6 select-text">
-                  <table 
-                    style={{
-                      width: '100%',
-                      borderCollapse: 'collapse',
-                      fontFamily: reportData.infoTable.styles.fontFamily || 'Times New Roman',
-                      fontSize: `${reportData.infoTable.styles.fontSize || 11}pt`,
-                      borderRadius: `${reportData.infoTable.styles.borderRadius || 0}px`,
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <tbody>
-                      {reportData.infoTable.rows
-                        .filter(row => row.visible !== false)
-                        .sort((a, b) => a.order - b.order)
-                        .map((row, idx) => {
-                          const isAlternate = idx % 2 !== 0;
-                          const rowBg = isAlternate 
-                            ? reportData.infoTable?.styles.alternateRowColor || '#f9fafb' 
-                            : reportData.infoTable?.styles.alternateRowBg || '#ffffff';
-
-                          const cellPadding = `${reportData.infoTable?.styles.cellPadding || 8}px`;
-                          const borderStyle = reportData.infoTable?.styles.showBorder 
-                            ? `${reportData.infoTable?.styles.borderThickness || 1}px solid #000000` 
-                            : 'none';
-
-                          return (
-                            <tr 
-                              key={row.id} 
-                              style={{ 
-                                backgroundColor: rowBg,
-                                height: `${reportData.infoTable?.styles.rowHeight || 40}px`
-                              }}
-                            >
-                              <td 
-                                style={{
-                                  width: `${reportData.infoTable?.styles.colWidth || 35}%`,
-                                  padding: cellPadding,
-                                  border: borderStyle,
-                                  fontWeight: 'bold',
-                                  color: reportData.infoTable?.styles.headerColor || '#000000',
-                                  textAlign: (reportData.infoTable?.styles.align || 'left') as any
-                                }}
-                              >
-                                {row.name}
-                                {row.required && <span className="text-red-500 ml-0.5 font-bold">*</span>}
-                              </td>
-                              <td 
-                                style={{
-                                  width: `${100 - (reportData.infoTable?.styles.colWidth || 35)}%`,
-                                  padding: cellPadding,
-                                  border: borderStyle,
-                                  textAlign: 'left'
-                                }}
-                              >
-                                {row.value || <span className="text-slate-300 italic no-print">(Empty)</span>}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Report Table */}
-              <div className="report-content select-text">
-                <table>
-                  <tbody>
-                    {sortedFields.map((field) => (
-                      <tr key={field.id} className="border-t border-black">
-                        <td className="report-table-heading font-serif text-[12pt] font-bold w-[30%]">
-                          {field.heading}
-                        </td>
-                        <td className="report-table-description font-serif text-[12pt] text-justify w-[70%]">
-                          {field.description ? (
-                            <div 
-                              className="rich-text-content leading-relaxed" 
-                              dangerouslySetInnerHTML={{ __html: field.description }} 
-                            />
-                          ) : (
-                            <span className="text-slate-400 italic no-print">(No details entered)</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Photo Section */}
-              {sortedPhotos.length > 0 && (
-                <div className="mt-8 select-text">
-                  <h3 className="font-serif text-[12pt] font-bold uppercase border-b border-black pb-1 mb-4">
-                    Photographs & Gallery
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {sortedPhotos.map((photo) => (
-                      <div key={photo.id} className="flex flex-col border border-black p-1 bg-white break-inside-avoid">
-                        <div className="w-full h-[140px] flex items-center justify-center overflow-hidden bg-slate-50">
-                          <img
-                            src={photo.src}
-                            alt={photo.caption}
-                            className="max-w-full max-h-full object-contain"
-                          />
-                        </div>
-                        {photo.caption && (
-                          <div className="text-[10pt] font-serif italic text-center mt-1 border-t border-slate-200 pt-1">
-                            {photo.caption}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Signature Section */}
-              {sortedSignatures.length > 0 && (
-                <div className="mt-12 select-text break-inside-avoid">
-                  <div className="flex flex-wrap justify-between gap-6 pt-4 border-t border-dashed border-slate-300">
-                    {sortedSignatures.map((sig) => (
-                      <div key={sig.id} className="flex flex-col items-center text-center min-w-[120px]">
-                        {sig.image ? (
-                          <div className="h-[50px] w-full flex items-center justify-center mb-1">
-                            <img
-                              src={sig.image}
-                              alt="Signature"
-                              className="max-h-full object-contain mix-blend-multiply"
-                            />
-                          </div>
-                        ) : (
-                          <div className="h-[50px] border-b border-black w-24 mb-1 select-none" />
-                        )}
-                        <span className="text-[10pt] font-serif font-bold">{sig.name || '___________'}</span>
-                        <span className="text-[9pt] font-serif text-slate-600">{sig.designation}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Document Footer */}
-            {footer.visible !== false && (
-              <div className="mt-8 pt-2 border-t border-slate-300 flex justify-between items-center text-[7.5pt] text-slate-500 font-serif w-full break-inside-avoid">
-                <div className="flex flex-col">
-                  {footer.text && <span>{footer.text}</span>}
-                  {(footer.website || footer.email) && (
-                    <span>
-                      {footer.website && `URL: ${footer.website}`}
-                      {footer.website && footer.email && ' | '}
-                      {footer.email && `Email: ${footer.email}`}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  {Object.entries(footer.socials || {}).map(([key, val]) => (
-                    val && <span key={key}>{key}: {val}</span>
-                  ))}
-                  {footer.qrCode && (
-                    <img
-                      src={footer.qrCode}
-                      alt="Footer QR Code"
-                      className="w-10 h-10 object-contain"
-                    />
-                  )}
-                </div>
-              </div>
-            )}
-
+            ))}
           </div>
         </div>
+      )}
+
+      {/* 6. Signature Section */}
+      {sortedSignatures.length > 0 && (
+        <div className="mt-12 select-text signatures-section-container break-inside-avoid">
+          <div className="flex flex-wrap justify-between gap-6 pt-4 border-t border-dashed border-slate-300">
+            {sortedSignatures.map((sig) => (
+              <div key={sig.id} className="flex flex-col items-center text-center min-w-[120px] signature-block-container">
+                {sig.image ? (
+                  <div className="h-[50px] w-full flex items-center justify-center mb-1">
+                    <img
+                      src={sig.image}
+                      alt="Signature"
+                      className="max-h-full object-contain mix-blend-multiply"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-[50px] border-b border-black w-24 mb-1 select-none" />
+                )}
+                <span className="text-[10pt] font-serif font-bold">{sig.name || '___________'}</span>
+                <span className="text-[9pt] font-serif text-slate-600">{sig.designation}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Invisible spacer to avoid clipping boundaries in measurement pass */}
+      {isMeasure && <div style={{ height: '30px' }} />}
+    </div>
+  );
+};
+
+// ── Sub-component: A4 Page Footer ──────────────────────────────────────────────
+const PageFooter: React.FC<{ footer: any; pageNum: number; totalPages: number }> = ({ footer, pageNum, totalPages }) => {
+  return (
+    <div className="mt-auto pt-2 border-t border-slate-300 flex justify-between items-center text-[7.5pt] text-slate-500 font-serif w-full break-inside-avoid bg-white document-footer-container">
+      <div className="flex flex-col">
+        {footer.text && <span>{footer.text}</span>}
+        {(footer.website || footer.email) && (
+          <span>
+            {footer.website && `URL: ${footer.website}`}
+            {footer.website && footer.email && ' | '}
+            {footer.email && `Email: ${footer.email}`}
+          </span>
+        )}
+      </div>
+      
+      <div className="flex items-center gap-2">
+        {Object.entries(footer.socials || {}).map(([key, val]) => (
+          val && <span key={key}>{key}: {String(val)}</span>
+        ))}
+        {footer.qrCode && (
+          <img
+            src={footer.qrCode}
+            alt="Footer QR Code"
+            className="w-8 h-8 object-contain"
+          />
+        )}
+        <span className="ml-4 font-semibold text-slate-600">Page {pageNum} of {totalPages}</span>
       </div>
     </div>
   );

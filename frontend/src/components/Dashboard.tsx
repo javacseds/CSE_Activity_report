@@ -61,6 +61,28 @@ interface ReportData {
     border?: string;
     borderRadius?: number;
   };
+  headerStyles?: {
+    fontFamily: string;
+    fontSize: number;
+    color: string;
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    align: 'left' | 'center' | 'right' | 'justify';
+    backgroundColor: string;
+    height: number;
+    spacing: number;
+    showBorder: boolean;
+    visible: boolean;
+    institutionName: string;
+  };
+  imageConfig?: {
+    layoutType: 'grid' | 'custom';
+    columns: number;
+    aspectRatio: 'maintain' | 'crop';
+    maxPerPage: number;
+    alignment: 'left' | 'center' | 'right';
+  };
   logos: Logo[];
   infoTable?: {
     rows: Array<{
@@ -343,6 +365,28 @@ export const Dashboard: React.FC = () => {
         padding: 10,
         border: 'none',
         borderRadius: 0
+      },
+      headerStyles: templateObj?.headerStyles || {
+        fontFamily: 'Times New Roman',
+        fontSize: 12,
+        color: '#000000',
+        bold: true,
+        italic: false,
+        underline: false,
+        align: 'center',
+        backgroundColor: '#ffffff',
+        height: 60,
+        spacing: 15,
+        showBorder: true,
+        visible: true,
+        institutionName: 'GOUTHAMI'
+      },
+      imageConfig: templateObj?.imageConfig || {
+        layoutType: 'grid',
+        columns: 2,
+        aspectRatio: 'maintain',
+        maxPerPage: 4,
+        alignment: 'center'
       },
       logos: templateObj?.logos || DEFAULT_LOGOS,
       infoTable: templateObj?.infoTable || {
