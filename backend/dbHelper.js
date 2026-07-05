@@ -110,7 +110,28 @@ const ReportSchema = new mongoose.Schema({
     website: { type: String, default: '' },
     email: { type: String, default: '' },
     qrCode: { type: String, default: '' }, // base64 QR
-    socials: { type: Map, of: String, default: {} }
+    socials: { type: Map, of: String, default: {} },
+    showBorder: { type: Boolean, default: true },
+    showLine: { type: Boolean, default: true },
+    backgroundColor: { type: String, default: '#ffffff' },
+    fields: [{
+      id: String,
+      type: { type: String },
+      label: String,
+      value: String,
+      visible: { type: Boolean, default: true },
+      required: { type: Boolean, default: false },
+      order: Number,
+      styles: {
+        fontFamily: { type: String, default: 'Times New Roman' },
+        fontSize: { type: Number, default: 8 },
+        color: { type: String, default: '#64748b' },
+        bold: { type: Boolean, default: false },
+        italic: { type: Boolean, default: false },
+        underline: { type: Boolean, default: false },
+        align: { type: String, default: 'left' }
+      }
+    }]
   },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
   userIdFallback: String, // string id for JSON database

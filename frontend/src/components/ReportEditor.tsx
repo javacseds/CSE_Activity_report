@@ -11,6 +11,9 @@ interface Logo {
   src: string;
   visible: boolean;
   label: string;
+  order: number;
+  width?: number;
+  height?: number;
 }
 
 interface Field {
@@ -70,6 +73,7 @@ interface ReportData {
     showBorder: boolean;
     visible: boolean;
     institutionName: string;
+    logoAlignment?: string;
   };
   imageConfig?: {
     layoutType: 'grid' | 'custom';
@@ -114,7 +118,30 @@ interface ReportData {
     email: string;
     qrCode: string;
     socials: Record<string, string>;
+    showBorder?: boolean;
+    showLine?: boolean;
+    backgroundColor?: string;
+    fields?: Array<{
+      id: string;
+      type: string;
+      label: string;
+      value: string;
+      visible: boolean;
+      required: boolean;
+      order: number;
+      styles: {
+        fontFamily: string;
+        fontSize: number;
+        color: string;
+        bold: boolean;
+        italic: boolean;
+        underline: boolean;
+        align: 'left' | 'center' | 'right';
+      };
+    }>;
   };
+  version?: number;
+  history?: Array<any>;
 }
 
 interface ReportEditorProps {
@@ -580,6 +607,60 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
     });
   };
 
+  // --- LOGO MANIPULATION ACTIONS ---
+  const handleAddCustomLogo = () => {
+    const newLogo = {
+      id: 'logo_' + Math.random().toString(36).substr(2, 9),
+      label: 'New Logo',
+      src: '',
+      visible: true,
+      order: reportData.logos.length,
+      width: 50,
+      height: 50
+    };
+    onChange({
+      ...reportData,
+      logos: [...reportData.logos, newLogo]
+    });
+  };
+
+  const handleUpdateLogoField = (id: string, key: string, val: any) => {
+    const updated = reportData.logos.map(l => {
+      if (l.id === id) {
+        return { ...l, [key]: val };
+      }
+      return l;
+    });
+    onChange({
+      ...reportData,
+      logos: updated
+    });
+  };
+
+  const handleMoveLogo = (index: number, direction: 'left' | 'right') => {
+    const list = [...reportData.logos].sort((a, b) => a.order - b.order);
+    if (direction === 'left' && index === 0) return;
+    if (direction === 'right' && index === list.length - 1) return;
+
+    const swapIndex = direction === 'left' ? index - 1 : index + 1;
+    const tempOrder = list[index].order;
+    list[index].order = list[swapIndex].order;
+    list[swapIndex].order = tempOrder;
+
+    onChange({
+      ...reportData,
+      logos: list
+    });
+  };
+
+  const handleDeleteLogo = (id: string) => {
+    const updated = reportData.logos.filter(l => l.id !== id);
+    onChange({
+      ...reportData,
+      logos: updated
+    });
+  };
+
   const handleImageConfigChange = (key: string, val: any) => {
     onChange({
       ...reportData,
@@ -594,6 +675,185 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
         [key]: val
       }
     });
+  };
+
+  // --- DEFAULT FOOTER FIELDS ARRAY ---
+  const DEFAULT_FOOTER_FIELDS: any[] = [
+    { id: 'f_pagenum', type: 'pageNumber', label: 'Page Number', value: '', visible: true, required: true, order: 0, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'right' } },
+    { id: 'f_qrcode', type: 'qrCode', label: 'QR Code', value: '', visible: true, required: false, order: 1, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'right' } },
+    { id: 'f_website', type: 'website', label: 'Website', value: 'www.gitamw.ac.in', visible: true, required: false, order: 2, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_email', type: 'email', label: 'Email Address', value: 'gitamw@gmail.com', visible: true, required: false, order: 3, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_phone', type: 'phone', label: 'Phone Number', value: '', visible: false, required: false, order: 4, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_dept', type: 'deptName', label: 'Department Name', value: 'Department of Computer Science', visible: false, required: false, order: 5, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_inst', type: 'instName', label: 'Institution Name', value: 'GOUTHAMI', visible: false, required: false, order: 6, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_address', type: 'address', label: 'Address', value: '', visible: false, required: false, order: 7, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_copyright', type: 'copyright', label: 'Copyright Text', value: '© 2026 GOUTHAMI.', visible: false, required: false, order: 8, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_fb', type: 'facebook', label: 'Facebook Link', value: '', visible: false, required: false, order: 9, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } },
+    { id: 'f_ig', type: 'instagram', label: 'Instagram Link', value: '', visible: false, required: false, order: 10, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } },
+    { id: 'f_li', type: 'linkedin', label: 'LinkedIn Link', value: '', visible: false, required: false, order: 11, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } },
+    { id: 'f_tw', type: 'twitter', label: 'Twitter/X Link', value: '', visible: false, required: false, order: 12, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } },
+    { id: 'f_yt', type: 'youtube', label: 'YouTube Link', value: '', visible: false, required: false, order: 13, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } },
+    { id: 'f_custom', type: 'customText', label: 'Custom Footer Text', value: 'GITAMW/IQAC/AR-01', visible: true, required: false, order: 14, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_date', type: 'date', label: 'Date', value: '2026-07-05', visible: false, required: false, order: 15, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_conf', type: 'confidential', label: 'Confidential Label', value: 'CONFIDENTIAL', visible: false, required: false, order: 16, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } }
+  ];
+
+  // --- ADVANCED FOOTER ACTIONS ---
+  const handleUpdateFooterField = (id: string, key: string, val: any) => {
+    const fieldsList = reportData.footer.fields || DEFAULT_FOOTER_FIELDS;
+    const updated = fieldsList.map(f => {
+      if (f.id === id) {
+        if (key.startsWith('styles.')) {
+          const styleKey = key.split('.')[1];
+          return { ...f, styles: { ...f.styles, [styleKey]: val } };
+        }
+        return { ...f, [key]: val };
+      }
+      return f;
+    });
+    onChange({
+      ...reportData,
+      footer: {
+        ...reportData.footer,
+        fields: updated
+      }
+    });
+  };
+
+  const handleMoveFooterField = (index: number, direction: 'up' | 'down') => {
+    const fieldsList = [...(reportData.footer.fields || DEFAULT_FOOTER_FIELDS)].sort((a, b) => a.order - b.order);
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === fieldsList.length - 1) return;
+
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    const tempOrder = fieldsList[index].order;
+    fieldsList[index].order = fieldsList[swapIndex].order;
+    fieldsList[swapIndex].order = tempOrder;
+
+    onChange({
+      ...reportData,
+      footer: {
+        ...reportData.footer,
+        fields: fieldsList
+      }
+    });
+  };
+
+  const handleAddCustomFooterField = () => {
+    const fieldsList = reportData.footer.fields || DEFAULT_FOOTER_FIELDS;
+    const currentMaxOrder = fieldsList.reduce((max, f) => f.order > max ? f.order : max, 0);
+    const newField = {
+      id: 'f_custom_' + Math.random().toString(36).substr(2, 9),
+      type: 'customText',
+      label: 'Custom Field',
+      value: 'New Field Value',
+      visible: true,
+      required: false,
+      order: currentMaxOrder + 1,
+      styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } as any
+    };
+    onChange({
+      ...reportData,
+      footer: {
+        ...reportData.footer,
+        fields: [...fieldsList, newField]
+      }
+    });
+  };
+
+  const handleDeleteFooterField = (id: string) => {
+    const fieldsList = reportData.footer.fields || DEFAULT_FOOTER_FIELDS;
+    const updated = fieldsList.filter(f => f.id !== id);
+    onChange({
+      ...reportData,
+      footer: {
+        ...reportData.footer,
+        fields: updated
+      }
+    });
+  };
+
+  // --- TEMPLATE ACTIONS (Header & Footer) ---
+  const [headerTemplates, setHeaderTemplates] = useState<Record<string, any>>({});
+  const [footerTemplates, setFooterTemplates] = useState<Record<string, any>>({});
+  const [newTemplateName, setNewTemplateName] = useState('');
+
+  // Load saved templates from localStorage on mount
+  useEffect(() => {
+    try {
+      const hSaved = localStorage.getItem('sSavedHeaderTemplates');
+      const fSaved = localStorage.getItem('sSavedFooterTemplates');
+      if (hSaved) setHeaderTemplates(JSON.parse(hSaved));
+      if (fSaved) setFooterTemplates(JSON.parse(fSaved));
+    } catch (e) {
+      console.error('Failed to load templates:', e);
+    }
+  }, []);
+
+  const saveHeaderTemplate = (name: string) => {
+    if (!name.trim()) return;
+    const updated = {
+      ...headerTemplates,
+      [name.trim()]: {
+        headerStyles: reportData.headerStyles,
+        logos: reportData.logos
+      }
+    };
+    setHeaderTemplates(updated);
+    localStorage.setItem('sSavedHeaderTemplates', JSON.stringify(updated));
+    setNewTemplateName('');
+    alert(`Header template "${name}" saved!`);
+  };
+
+  const loadHeaderTemplate = (name: string) => {
+    const t = headerTemplates[name];
+    if (!t) return;
+    onChange({
+      ...reportData,
+      headerStyles: t.headerStyles,
+      logos: t.logos
+    });
+    alert(`Applied header template "${name}"`);
+  };
+
+  const deleteHeaderTemplate = (name: string) => {
+    const updated = { ...headerTemplates };
+    delete updated[name];
+    setHeaderTemplates(updated);
+    localStorage.setItem('sSavedHeaderTemplates', JSON.stringify(updated));
+    alert(`Deleted template "${name}"`);
+  };
+
+  const saveFooterTemplate = (name: string) => {
+    if (!name.trim()) return;
+    const updated = {
+      ...footerTemplates,
+      [name.trim()]: {
+        footer: reportData.footer
+      }
+    };
+    setFooterTemplates(updated);
+    localStorage.setItem('sSavedFooterTemplates', JSON.stringify(updated));
+    setNewTemplateName('');
+    alert(`Footer template "${name}" saved!`);
+  };
+
+  const loadFooterTemplate = (name: string) => {
+    const t = footerTemplates[name];
+    if (!t) return;
+    onChange({
+      ...reportData,
+      footer: t.footer
+    });
+    alert(`Applied footer template "${name}"`);
+  };
+
+  const deleteFooterTemplate = (name: string) => {
+    const updated = { ...footerTemplates };
+    delete updated[name];
+    setFooterTemplates(updated);
+    localStorage.setItem('sSavedFooterTemplates', JSON.stringify(updated));
+    alert(`Deleted template "${name}"`);
   };
 
   const handleSnapshotSave = async () => {
@@ -733,49 +993,169 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
         {/* TAB 1: BRANDING & TITLE */}
         {activeTab === 'branding' && (
           <div className="space-y-6">
-            <div>
-              <h3 className="text-sm font-bold text-slate-850 dark:text-white mb-3">Institutional Logo Configuration</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {reportData.logos.map((logo) => (
-                  <div key={logo.id} className="p-3 border border-slate-200 dark:border-slate-850 rounded-lg bg-white dark:bg-slate-950 flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-350">{logo.label} Logo</span>
-                      <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={logo.visible}
-                          onChange={() => handleLogoToggle(logo.id)}
-                          className="rounded text-blue-600"
-                        />
-                        <span>Visible</span>
-                      </label>
+            
+            {/* Header Templates Manager */}
+            <div className="p-3 bg-purple-50 dark:bg-purple-950/20 border border-purple-250 rounded-xl space-y-2 text-xs">
+              <span className="font-bold text-purple-700 dark:text-purple-300 block">Header Style Templates</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Template Name (e.g. My College Header)..."
+                  value={newTemplateName}
+                  onChange={(e) => setNewTemplateName(e.target.value)}
+                  className="flex-1 px-2.5 py-1.5 bg-white dark:bg-slate-900 border rounded text-xs focus:ring-1 focus:ring-purple-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => saveHeaderTemplate(newTemplateName)}
+                  className="px-3 py-1.5 bg-purple-650 hover:bg-purple-700 text-white rounded font-bold transition"
+                >
+                  Save Template
+                </button>
+              </div>
+              {Object.keys(headerTemplates).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-purple-100 dark:border-purple-900">
+                  {Object.keys(headerTemplates).map(name => (
+                    <div key={name} className="flex items-center gap-1 bg-white dark:bg-slate-900 px-2 py-1 rounded border border-purple-200">
+                      <button
+                        type="button"
+                        onClick={() => loadHeaderTemplate(name)}
+                        className="font-semibold text-purple-700 hover:underline"
+                      >
+                        {name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteHeaderTemplate(name)}
+                        className="text-red-505 font-bold hover:text-red-705 ml-1 text-sm leading-none"
+                      >
+                        ×
+                      </button>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-slate-850 dark:text-white">Institutional Logo Configuration</h3>
+                <button
+                  type="button"
+                  onClick={handleAddCustomLogo}
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                >
+                  <Plus size={12} /> Add Logo
+                </button>
+              </div>
 
-                    {logo.src ? (
-                      <div className="relative w-full h-24 border border-slate-200 rounded overflow-hidden flex items-center justify-center bg-slate-50">
-                        <img src={logo.src} alt={logo.label} className="max-h-full object-contain" />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLogo(logo.id)}
-                          className="absolute bottom-1 right-1 p-1 bg-red-650 hover:bg-red-700 text-white rounded transition shadow"
-                        >
-                          <Trash2 size={12} />
-                        </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[...reportData.logos].sort((a, b) => a.order - b.order).map((logo, idx, arr) => {
+                  const isPredefined = logo.id === 'gouthami' || logo.id === 'sjec' || logo.id === 'vtu' || logo.id === 'dept';
+                  return (
+                    <div key={logo.id} className="p-3 border border-slate-200 dark:border-slate-850 rounded-lg bg-white dark:bg-slate-950 flex flex-col gap-2 shadow-sm">
+                      <div className="flex items-center justify-between border-b pb-1">
+                        {isPredefined ? (
+                          <span className="text-xs font-bold text-slate-705 dark:text-slate-350">{logo.label} Logo</span>
+                        ) : (
+                          <input
+                            type="text"
+                            value={logo.label}
+                            onChange={(e) => handleUpdateLogoField(logo.id, 'label', e.target.value)}
+                            className="text-xs font-bold text-slate-700 bg-transparent border-b border-dashed focus:outline-none focus:border-blue-500 w-28"
+                          />
+                        )}
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveLogo(idx, 'left')}
+                            disabled={idx === 0}
+                            className="p-0.5 text-slate-405 hover:text-slate-800 disabled:opacity-30 transition"
+                            title="Move Left"
+                          >
+                            <ArrowUp size={11} className="-rotate-90" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveLogo(idx, 'right')}
+                            disabled={idx === arr.length - 1}
+                            className="p-0.5 text-slate-405 hover:text-slate-800 disabled:opacity-30 transition"
+                            title="Move Right"
+                          >
+                            <ArrowDown size={11} className="-rotate-90" />
+                          </button>
+                          <label className="flex items-center gap-0.5 text-xs cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={logo.visible}
+                              onChange={() => handleLogoToggle(logo.id)}
+                              className="rounded text-blue-600 focus:ring-0 h-3 w-3"
+                            />
+                            <span>Show</span>
+                          </label>
+                          {!isPredefined && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLogo(logo.id)}
+                              className="p-0.5 text-red-500 hover:bg-red-50 rounded ml-1 transition"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    ) : (
-                      <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-300 hover:border-blue-500 rounded cursor-pointer text-slate-400 hover:text-blue-500 transition">
-                        <Upload size={20} />
-                        <span className="text-[10px] mt-1 font-semibold">Upload Image</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleImageUpload(e, (base64) => handleLogoUpload(logo.id, base64))}
-                          className="hidden"
-                        />
-                      </label>
-                    )}
-                  </div>
-                ))}
+
+                      {logo.src ? (
+                        <div className="relative w-full h-24 border border-slate-200 rounded overflow-hidden flex items-center justify-center bg-slate-50">
+                          <img src={logo.src} alt={logo.label} className="max-h-full object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLogo(logo.id)}
+                            className="absolute bottom-1 right-1 p-1 bg-red-650 hover:bg-red-700 text-white rounded transition shadow"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-300 hover:border-blue-500 rounded cursor-pointer text-slate-400 hover:text-blue-500 transition">
+                          <Upload size={20} />
+                          <span className="text-[10px] mt-1 font-semibold">Upload Image</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(e, (base64) => handleLogoUpload(logo.id, base64))}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+
+                      {logo.visible && logo.src && (
+                        <div className="grid grid-cols-2 gap-2 text-[10px] border-t pt-1.5 mt-0.5">
+                          <div>
+                            <label className="block text-slate-450 mb-0.5">Width: {logo.width || 50}px</label>
+                            <input
+                              type="range"
+                              min="30"
+                              max="300"
+                              value={logo.width || 50}
+                              onChange={(e) => handleUpdateLogoField(logo.id, 'width', parseInt(e.target.value) || 50)}
+                              className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-450 mb-0.5">Height: {logo.height || 50}px</label>
+                            <input
+                              type="range"
+                              min="30"
+                              max="150"
+                              value={logo.height || 50}
+                              onChange={(e) => handleUpdateLogoField(logo.id, 'height', parseInt(e.target.value) || 50)}
+                              className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             
@@ -848,8 +1228,20 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
                       max="50"
                       value={reportData.headerStyles?.spacing || 15}
                       onChange={(e) => handleHeaderStyleChange('spacing', parseInt(e.target.value) || 0)}
-                      className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-850 dark:text-white"
+                      className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-855 dark:text-white"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-slate-450 mb-0.5">Logos Row Alignment</label>
+                    <select
+                      value={reportData.headerStyles?.logoAlignment || 'center'}
+                      onChange={(e) => handleHeaderStyleChange('logoAlignment', e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded text-slate-800 dark:text-white"
+                    >
+                      <option value="left">Left Aligned</option>
+                      <option value="center">Centered</option>
+                      <option value="right">Right Aligned</option>
+                    </select>
                   </div>
                   <div className="flex items-center gap-4 col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                     <label className="flex items-center gap-1.5 font-semibold cursor-pointer select-none">
@@ -1723,7 +2115,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
         {activeTab === 'footer' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <h3 className="text-sm font-bold text-slate-855 dark:text-white">Document Footer Details</h3>
+              <h3 className="text-sm font-bold text-slate-850 dark:text-white">Document Footer Details</h3>
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -1735,76 +2127,299 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
               </label>
             </div>
 
-            {reportData.footer.visible !== false ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Footer Text Note (e.g. Institutional Accreditation Code)</label>
-                  <input
-                    type="text"
-                    value={reportData.footer.text}
-                    onChange={(e) => handleFooterChange('text', e.target.value)}
-                    placeholder="SJEC/IQAC/2026/AR-01"
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-250 dark:border-slate-800 rounded-lg text-sm"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Website URL</label>
+            {reportData.footer.visible !== false && (
+              <>
+                {/* Footer Templates */}
+                <div className="p-3 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 rounded-xl space-y-2 text-xs">
+                  <span className="font-bold text-purple-700 dark:text-purple-300 block">Footer Style Templates</span>
+                  <div className="flex gap-2">
                     <input
                       type="text"
-                      value={reportData.footer.website}
-                      onChange={(e) => handleFooterChange('website', e.target.value)}
-                      placeholder="https://www.sjec.ac.in"
-                      className="w-full px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-250 dark:border-slate-800 rounded-lg text-sm"
+                      placeholder="Template Name (e.g. My Footer)..."
+                      value={newTemplateName}
+                      onChange={(e) => setNewTemplateName(e.target.value)}
+                      className="flex-1 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 rounded text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none"
                     />
+                    <button
+                      type="button"
+                      onClick={() => saveFooterTemplate(newTemplateName)}
+                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded font-bold transition text-xs"
+                    >
+                      Save Template
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Email Address</label>
-                    <input
-                      type="email"
-                      value={reportData.footer.email}
-                      onChange={(e) => handleFooterChange('email', e.target.value)}
-                      placeholder="sjec@sjec.ac.in"
-                      className="w-full px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-250 dark:border-slate-800 rounded-lg text-sm"
-                    />
+                  {Object.keys(footerTemplates).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-purple-100 dark:border-purple-800">
+                      {Object.keys(footerTemplates).map(name => (
+                        <div key={name} className="flex items-center gap-1 bg-white dark:bg-slate-900 px-2 py-1 rounded border border-purple-200">
+                          <button
+                            type="button"
+                            onClick={() => loadFooterTemplate(name)}
+                            className="font-semibold text-purple-700 hover:underline"
+                          >
+                            {name}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteFooterTemplate(name)}
+                            className="text-red-500 font-bold hover:text-red-700 ml-1 text-sm leading-none"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Style Settings */}
+                <div className="p-4 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-955 rounded-xl space-y-3 shadow-sm text-xs">
+                  <span className="font-bold text-slate-700 dark:text-slate-350 block border-b pb-1">Footer Styling Options</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex items-center gap-1.5 font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={reportData.footer.showBorder !== false}
+                        onChange={(e) => handleFooterChange('showBorder', e.target.checked)}
+                        className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                      />
+                      <span>Show Border Box</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={reportData.footer.showLine !== false}
+                        onChange={(e) => handleFooterChange('showLine', e.target.checked)}
+                        className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                      />
+                      <span>Show Divider Line</span>
+                    </label>
+                    <div className="col-span-2">
+                      <label className="block text-slate-450 mb-0.5">Footer Background Color</label>
+                      <input
+                        type="color"
+                        value={reportData.footer.backgroundColor || '#ffffff'}
+                        onChange={(e) => handleFooterChange('backgroundColor', e.target.value)}
+                        className="w-full h-8 p-0 bg-transparent cursor-pointer rounded border border-slate-300"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* QR Code Upload / Preset */}
-                <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">QR Code Image</label>
-                  {reportData.footer.qrCode ? (
-                    <div className="flex items-center gap-3">
-                      <div className="w-16 h-16 border border-slate-200 bg-white p-1 rounded overflow-hidden flex items-center justify-center">
-                        <img src={reportData.footer.qrCode} alt="QR Code" className="max-h-full object-contain" />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleFooterChange('qrCode', '')}
-                        className="px-2.5 py-1 bg-red-650 hover:bg-red-700 text-white rounded text-[10px] transition font-bold"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="flex items-center justify-center gap-2 w-full py-3 border border-dashed border-slate-350 hover:border-blue-500 rounded bg-white dark:bg-slate-950 cursor-pointer text-slate-400 hover:text-blue-500 transition text-xs font-bold">
-                      <Upload size={16} />
-                      <span>Upload QR Code Image</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleImageUpload(e, (base64) => handleFooterChange('qrCode', base64))}
-                        className="hidden"
-                      />
-                    </label>
-                  )}
+                {/* Custom Field Append Button */}
+                <button
+                  type="button"
+                  onClick={handleAddCustomFooterField}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-750 text-white rounded-lg font-bold text-xs transition flex items-center justify-center gap-1.5 shadow"
+                >
+                  <Plus size={14} />
+                  <span>Add Custom Footer Field</span>
+                </button>
+
+                {/* Footer Fields customizer List */}
+                <div className="space-y-4 pt-2">
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-400 block border-b pb-1">Footer Fields List ({[...(reportData.footer.fields || DEFAULT_FOOTER_FIELDS)].length} items)</span>
+                  {[...(reportData.footer.fields || DEFAULT_FOOTER_FIELDS)]
+                    .sort((a, b) => a.order - b.order)
+                    .map((field, idx, arr) => {
+                      const isPredefined = !field.id.startsWith('f_custom_');
+                      return (
+                        <div key={field.id} className="p-4 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-950 rounded-xl space-y-3 shadow-sm hover:shadow transition">
+                          {/* Item header controls */}
+                          <div className="flex items-center justify-between border-b pb-1.5">
+                            <span className="text-xs font-bold text-blue-650 uppercase tracking-wider">{field.label}</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveFooterField(idx, 'up')}
+                                disabled={idx === 0}
+                                className="p-0.5 text-slate-400 hover:text-slate-800 disabled:opacity-30 transition"
+                              >
+                                <ArrowUp size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveFooterField(idx, 'down')}
+                                disabled={idx === arr.length - 1}
+                                className="p-0.5 text-slate-400 hover:text-slate-800 disabled:opacity-30 transition"
+                              >
+                                <ArrowDown size={12} />
+                              </button>
+                              {!isPredefined && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteFooterField(field.id)}
+                                  className="p-0.5 text-red-500 hover:bg-red-50 rounded transition ml-1"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Visibility and Required controls */}
+                          <div className="flex items-center gap-4 text-xs font-semibold">
+                            <label className="flex items-center gap-1 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={field.visible}
+                                onChange={(e) => handleUpdateFooterField(field.id, 'visible', e.target.checked)}
+                                className="rounded text-blue-650 focus:ring-blue-500 h-3.5 w-3.5"
+                              />
+                              <span>Visible</span>
+                            </label>
+                            <label className="flex items-center gap-1 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={(e) => handleUpdateFooterField(field.id, 'required', e.target.checked)}
+                                className="rounded text-blue-650 focus:ring-blue-500 h-3.5 w-3.5"
+                              />
+                              <span>Required</span>
+                            </label>
+                          </div>
+
+                          {/* Editable Value and styles */}
+                          {field.visible && (
+                            <div className="space-y-3 text-xs pt-1.5 border-t border-slate-100 dark:border-slate-850">
+                              {/* Field Value Input */}
+                              {field.type !== 'pageNumber' && (
+                                <div>
+                                  <label className="block text-slate-450 mb-0.5 font-semibold">
+                                    {field.type === 'qrCode' ? 'QR Code Image' : 'Field Text Value'}
+                                  </label>
+                                  {field.type === 'qrCode' ? (
+                                    field.value ? (
+                                      <div className="flex items-center justify-between p-2 border rounded">
+                                        <img src={field.value} alt="Footer QR Code" className="w-12 h-12 object-contain" />
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateFooterField(field.id, 'value', '')}
+                                          className="px-2 py-1 bg-red-650 hover:bg-red-700 text-white rounded text-[10px] font-bold"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <label className="flex items-center justify-center gap-1.5 w-full py-2 border border-dashed hover:border-blue-500 rounded bg-slate-50 dark:bg-slate-900 cursor-pointer text-slate-500 hover:text-blue-500 transition font-bold text-[10px]">
+                                        <Upload size={14} />
+                                        <span>Upload QR Code Image</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          onChange={(e) => handleImageUpload(e, (base64) => handleUpdateFooterField(field.id, 'value', base64))}
+                                          className="hidden"
+                                        />
+                                      </label>
+                                    )
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      value={field.value}
+                                      onChange={(e) => handleUpdateFooterField(field.id, 'value', e.target.value)}
+                                      className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-900 border rounded text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Custom Title Label if it is a Custom Field */}
+                              {!isPredefined && (
+                                <div>
+                                  <label className="block text-slate-450 mb-0.5 font-semibold">Custom Label / Title</label>
+                                  <input
+                                    type="text"
+                                    value={field.label}
+                                    onChange={(e) => handleUpdateFooterField(field.id, 'label', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-900 border rounded text-xs font-semibold focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                  />
+                                </div>
+                              )}
+
+                              {/* Typography styles settings */}
+                              <div className="grid grid-cols-2 gap-2.5 border-t pt-2 mt-1">
+                                <div>
+                                  <label className="block text-slate-450 mb-0.5">Font Family</label>
+                                  <select
+                                    value={field.styles?.fontFamily || 'Times New Roman'}
+                                    onChange={(e) => handleUpdateFooterField(field.id, 'styles.fontFamily', e.target.value)}
+                                    className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border rounded text-xs"
+                                  >
+                                    <option value="Times New Roman">Times New Roman</option>
+                                    <option value="Arial">Arial</option>
+                                    <option value="Georgia">Georgia</option>
+                                    <option value="Outfit">Outfit</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-slate-450 mb-0.5">Font Size (pt)</label>
+                                  <input
+                                    type="number"
+                                    min="6"
+                                    max="14"
+                                    value={field.styles?.fontSize || 8}
+                                    onChange={(e) => handleUpdateFooterField(field.id, 'styles.fontSize', parseInt(e.target.value) || 8)}
+                                    className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border rounded text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-slate-450 mb-0.5">Text Color</label>
+                                  <input
+                                    type="color"
+                                    value={field.styles?.color || '#64748b'}
+                                    onChange={(e) => handleUpdateFooterField(field.id, 'styles.color', e.target.value)}
+                                    className="w-full h-8 p-0 bg-transparent cursor-pointer rounded border border-slate-350"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-slate-450 mb-0.5">Alignment</label>
+                                  <select
+                                    value={field.styles?.align || 'left'}
+                                    onChange={(e) => handleUpdateFooterField(field.id, 'styles.align', e.target.value)}
+                                    className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border rounded text-xs"
+                                  >
+                                    <option value="left">Left</option>
+                                    <option value="center">Center</option>
+                                    <option value="right">Right</option>
+                                  </select>
+                                </div>
+                                <div className="col-span-2 flex gap-4 pt-1.5">
+                                  <label className="flex items-center gap-1 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!field.styles?.bold}
+                                      onChange={(e) => handleUpdateFooterField(field.id, 'styles.bold', e.target.checked)}
+                                      className="rounded"
+                                    />
+                                    <span>Bold</span>
+                                  </label>
+                                  <label className="flex items-center gap-1 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!field.styles?.italic}
+                                      onChange={(e) => handleUpdateFooterField(field.id, 'styles.italic', e.target.checked)}
+                                      className="rounded"
+                                    />
+                                    <span>Italic</span>
+                                  </label>
+                                  <label className="flex items-center gap-1 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!field.styles?.underline}
+                                      onChange={(e) => handleUpdateFooterField(field.id, 'styles.underline', e.target.checked)}
+                                      className="rounded"
+                                    />
+                                    <span>Underline</span>
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
-              </div>
-            ) : (
-              <div className="p-6 bg-slate-50 dark:bg-slate-950 rounded-xl text-xs text-slate-500 italic text-center border border-dashed border-slate-200 dark:border-slate-800">
-                Footer is currently disabled. Check the "Show Footer in PDF" toggle above to configure and display the document footer.
-              </div>
+              </>
             )}
           </div>
         )}

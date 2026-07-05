@@ -14,6 +14,9 @@ interface Logo {
   src: string;
   visible: boolean;
   label: string;
+  order: number;
+  width?: number;
+  height?: number;
 }
 
 interface Field {
@@ -130,30 +133,35 @@ const DEFAULT_LOGOS: Logo[] = [
     id: 'gouthami',
     label: 'Gouthami',
     visible: true,
+    order: 0,
     src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="%23800080"/><path d="M30 40 L50 20 L70 40 L50 60 Z" fill="none" stroke="white" stroke-width="4"/><text x="50" y="80" font-family="Arial" font-size="16" font-weight="bold" fill="white" text-anchor="middle">GITAMW</text></svg>'
   },
   {
     id: 'moe',
     label: 'MoE',
     visible: true,
+    order: 1,
     src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" rx="10" fill="%23e11d48"/><circle cx="50" cy="50" r="25" fill="none" stroke="white" stroke-width="4"/><text x="50" y="56" font-family="Arial" font-size="18" font-weight="bold" fill="white" text-anchor="middle">MoE</text></svg>'
   },
   {
     id: 'iic',
     label: 'IIC',
     visible: true,
+    order: 2,
     src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="%232563eb"/><path d="M30 65 C30 40 70 40 70 65" fill="none" stroke="white" stroke-width="6"/><circle cx="50" cy="40" r="10" fill="white"/></svg>'
   },
   {
     id: 'aicte',
     label: 'AICTE',
     visible: true,
+    order: 3,
     src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" rx="40" fill="%23ea580c"/><text x="50" y="57" font-family="Arial" font-size="20" font-weight="bold" fill="white" text-anchor="middle">AICTE</text></svg>'
   },
   {
     id: 'naac',
     label: 'NAAC',
     visible: true,
+    order: 4,
     src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="%231e3a8a"/><text x="50" y="55" font-family="Arial" font-size="20" font-weight="bold" fill="white" text-anchor="middle">NAAC</text></svg>'
   }
 ];
@@ -379,7 +387,8 @@ export const Dashboard: React.FC = () => {
         spacing: 15,
         showBorder: true,
         visible: true,
-        institutionName: 'GOUTHAMI'
+        institutionName: 'GOUTHAMI',
+        logoAlignment: 'center'
       },
       imageConfig: templateObj?.imageConfig || {
         layoutType: 'grid',
@@ -401,7 +410,29 @@ export const Dashboard: React.FC = () => {
         website: 'www.gitamw.ac.in',
         email: 'gitamw@gmail.com',
         qrCode: '',
-        socials: {}
+        socials: {},
+        showBorder: true,
+        showLine: true,
+        backgroundColor: '#ffffff',
+        fields: [
+          { id: 'f_pagenum', type: 'pageNumber', label: 'Page Number', value: '', visible: true, required: true, order: 0, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'right' } },
+          { id: 'f_qrcode', type: 'qrCode', label: 'QR Code', value: '', visible: true, required: false, order: 1, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'right' } },
+          { id: 'f_website', type: 'website', label: 'Website', value: 'www.gitamw.ac.in', visible: true, required: false, order: 2, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+          { id: 'f_email', type: 'email', label: 'Email Address', value: 'gitamw@gmail.com', visible: true, required: false, order: 3, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+          { id: 'f_phone', type: 'phone', label: 'Phone Number', value: '', visible: false, required: false, order: 4, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+          { id: 'f_dept', type: 'deptName', label: 'Department Name', value: 'Department of Computer Science', visible: false, required: false, order: 5, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+          { id: 'f_inst', type: 'instName', label: 'Institution Name', value: 'GOUTHAMI', visible: false, required: false, order: 6, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+          { id: 'f_address', type: 'address', label: 'Address', value: '', visible: false, required: false, order: 7, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+          { id: 'f_copyright', type: 'copyright', label: 'Copyright Text', value: '© 2026 GOUTHAMI.', visible: false, required: false, order: 8, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+          { id: 'f_fb', type: 'facebook', label: 'Facebook Link', value: '', visible: false, required: false, order: 9, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } },
+          { id: 'f_ig', type: 'instagram', label: 'Instagram Link', value: '', visible: false, required: false, order: 10, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } },
+          { id: 'f_li', type: 'linkedin', label: 'LinkedIn Link', value: '', visible: false, required: false, order: 11, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } },
+          { id: 'f_tw', type: 'twitter', label: 'Twitter/X Link', value: '', visible: false, required: false, order: 12, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } },
+          { id: 'f_yt', type: 'youtube', label: 'YouTube Link', value: '', visible: false, required: false, order: 13, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } },
+          { id: 'f_custom', type: 'customText', label: 'Custom Footer Text', value: 'GITAMW/IQAC/AR-01', visible: true, required: false, order: 14, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+          { id: 'f_date', type: 'date', label: 'Date', value: '2026-07-05', visible: false, required: false, order: 15, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+          { id: 'f_conf', type: 'confidential', label: 'Confidential Label', value: 'CONFIDENTIAL', visible: false, required: false, order: 16, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'center' } }
+        ]
       }
     };
 

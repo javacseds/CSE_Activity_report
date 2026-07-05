@@ -17,6 +17,9 @@ interface Logo {
   src: string;
   visible: boolean;
   label: string;
+  order: number;
+  width?: number;
+  height?: number;
 }
 
 interface Field {
@@ -76,6 +79,7 @@ interface ReportData {
     showBorder: boolean;
     visible: boolean;
     institutionName: string;
+    logoAlignment?: string;
   };
   imageConfig?: {
     layoutType: 'grid' | 'custom';
@@ -120,6 +124,27 @@ interface ReportData {
     email: string;
     qrCode: string;
     socials: Record<string, string>;
+    showBorder?: boolean;
+    showLine?: boolean;
+    backgroundColor?: string;
+    fields?: Array<{
+      id: string;
+      type: string;
+      label: string;
+      value: string;
+      visible: boolean;
+      required: boolean;
+      order: number;
+      styles: {
+        fontFamily: string;
+        fontSize: number;
+        color: string;
+        bold: boolean;
+        italic: boolean;
+        underline: boolean;
+        align: 'left' | 'center' | 'right';
+      };
+    }>;
   };
 }
 
@@ -246,7 +271,9 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({
       await exportToPdf(safeFilename, (msg) => setPdfStatus(msg));
     } catch (err: any) {
       console.error('PDF export failed:', err);
-      setPdfStatus('Failed: ' + (err?.message || String(err)));
+      const errMsg = err?.message || String(err);
+      setPdfStatus('Failed');
+      alert(`PDF Export Failed:\n${errMsg}`);
     } finally {
       setTimeout(() => setPdfStatus(null), 5000);
     }
@@ -296,19 +323,29 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({
         </button>
       </div>
 
-      {/* Hidden layout measurement container */}
+      {/* Hidden layout measurement container clipped to 1px to remain rendered at full opacity */}
       <div 
-        id="report-hidden-measure" 
-        style={{ 
-          position: 'absolute', 
-          left: '-9999px', 
-          top: '-9999px', 
-          width: `${CONTENT_W_PX}px`,
-          opacity: 0,
+        style={{
+          position: 'fixed',
+          left: '0px',
+          top: '0px',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+          opacity: 1,
+          zIndex: -1000,
           pointerEvents: 'none'
         }}
       >
-        <ReportContent reportData={reportData} isMeasure={true} />
+        <div 
+          id="report-hidden-measure" 
+          style={{ 
+            width: `${CONTENT_W_PX}px`,
+            background: '#ffffff'
+          }}
+        >
+          <ReportContent reportData={reportData} isMeasure={true} />
+        </div>
       </div>
 
       {/* Visible paginated document cards */}
@@ -332,14 +369,15 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({
               const totalPages = pageSlices.length;
 
               const maxHPx = isFirstPage ? (BORDER_H_MM * pxPerMm) : (USABLE_H_MM * pxPerMm);
-              const remainingSpacePercent = Math.max(0, Math.round(((maxHPx - slice.sliceH) / maxHPx) * 100));
+const remainingSpacePercent = Math.max(0, Math.round(((maxHPx - slice.sliceH) / maxHPx) * 100));
 
               // Determine where the vertical divider line should stop
               const sliceEndOffsetY = slice.offsetY + slice.sliceH;
               const tableEndOnPagePx = Math.min(sliceEndOffsetY, tableBottomPx);
               const tableEndOnPageMm = ((tableEndOnPagePx - slice.offsetY) / pxPerMm);
+              const maxBorderHMm = isFirstPage ? (sliceHMm + GAP_MM) : (sliceHMm + GAP_MM * 2);
               const yEndMm = tableBottomPx > sliceEndOffsetY
-                ? (MARGIN_MM + sliceHMm + GAP_MM * 2)
+                ? (MARGIN_MM + maxBorderHMm)
                 : (isFirstPage ? MARGIN_MM : (MARGIN_MM + GAP_MM)) + tableEndOnPageMm;
 
               return (
@@ -366,28 +404,29 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({
                       position: 'relative'
                     }}
                   >
-                    {/* Page outer border box for Page 2+ */}
-                    {!isFirstPage && (
-                      <div 
-                        className="absolute pointer-events-none"
-                        style={{
-                          top: '15mm',
-                          left: '15mm',
-                          width: `${CONTENT_W_MM}mm`,
-                          height: `${sliceHMm + GAP_MM * 2}mm`,
-                          border: '0.25mm solid #000000',
-                          zIndex: 10
-                        }}
-                      />
-                    )}
+                    {/* Page outer border box for all pages */}
+                    <div 
+                      className="absolute pointer-events-none"
+                      style={{
+                        top: '15mm',
+                        left: '15mm',
+                        width: `${CONTENT_W_MM}mm`,
+                        height: `${maxBorderHMm}mm`,
+                        borderLeft: '0.25mm solid #000000',
+                        borderRight: '0.25mm solid #000000',
+                        borderBottom: '0.25mm solid #000000',
+                        borderTop: isFirstPage ? 'none' : '0.25mm solid #000000',
+                        zIndex: 10
+                      }}
+                    />
 
-                    {/* Column Divider Line for Page 2+ tables */}
-                    {!isFirstPage && slice.offsetY < tableBottomPx && (
+                    {/* Column Divider Line for all pages' tables */}
+                    {slice.offsetY < tableBottomPx && (
                       <div 
                         className="absolute bg-black pointer-events-none"
                         style={{
                           left: '69mm', // 15mm left margin + 180mm * 0.3 = 69mm
-                          top: '15mm',  // starts at top border (15mm)
+                          top: '15mm',  // starts at top border boundary (15mm)
                           width: '0.25mm',
                           height: `${yEndMm - 15}mm`,
                           zIndex: 12
@@ -489,19 +528,28 @@ const ReportContent: React.FC<{ reportData: ReportData; isMeasure?: boolean }> =
             backgroundColor: headerStyles?.backgroundColor || 'transparent'
           }}
         >
-          <div className="flex flex-wrap items-center justify-center gap-3 w-full mb-3 select-none">
-            {visibleLogos.map((logo) => (
-              <div key={logo.id} className="flex flex-col items-center max-w-[65px] text-center">
-                <div className="w-[50px] h-[50px] flex items-center justify-center border border-slate-300 rounded overflow-hidden p-0.5 bg-white">
-                  <img
-                    src={logo.src}
-                    alt={logo.label}
-                    className="max-w-full max-h-full object-contain"
-                  />
+          <div className={`flex flex-wrap items-center gap-3 w-full mb-3 select-none ${
+            headerStyles?.logoAlignment === 'left' ? 'justify-start' : (headerStyles?.logoAlignment === 'right' ? 'justify-end' : 'justify-center')
+          }`}>
+            {visibleLogos.map((logo) => {
+              const logoW = logo.width || 50;
+              const logoH = logo.height || 50;
+              return (
+                <div key={logo.id} className="flex flex-col items-center text-center" style={{ maxWidth: `${logoW + 15}px` }}>
+                  <div 
+                    className="flex items-center justify-center border border-slate-300 rounded overflow-hidden p-0.5 bg-white"
+                    style={{ width: `${logoW}px`, height: `${logoH}px` }}
+                  >
+                    <img
+                      src={logo.src}
+                      alt={logo.label}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                  <span className="text-[7pt] mt-0.5 font-bold uppercase leading-tight select-none">{logo.label}</span>
                 </div>
-                <span className="text-[7pt] mt-0.5 font-bold uppercase leading-tight select-none">{logo.label}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div 
@@ -691,31 +739,117 @@ const ReportContent: React.FC<{ reportData: ReportData; isMeasure?: boolean }> =
 
 // ── Sub-component: A4 Page Footer ──────────────────────────────────────────────
 const PageFooter: React.FC<{ footer: any; pageNum: number; totalPages: number }> = ({ footer, pageNum, totalPages }) => {
+  if (footer.visible === false) return null;
+
+  // Default fallback if fields are missing
+  const defaultFields = [
+    { id: 'f_pagenum', type: 'pageNumber', label: 'Page Number', value: '', visible: true, required: true, order: 0, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'right' } },
+    { id: 'f_qrcode', type: 'qrCode', label: 'QR Code', value: '', visible: true, required: false, order: 1, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'right' } },
+    { id: 'f_website', type: 'website', label: 'Website', value: footer.website || 'www.gitamw.ac.in', visible: true, required: false, order: 2, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_email', type: 'email', label: 'Email Address', value: footer.email || 'gitamw@gmail.com', visible: true, required: false, order: 3, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } },
+    { id: 'f_custom', type: 'customText', label: 'Custom Footer Text', value: footer.text || 'GITAMW/IQAC/AR-01', visible: true, required: false, order: 14, styles: { fontFamily: 'Times New Roman', fontSize: 8, color: '#64748b', bold: false, italic: false, underline: false, align: 'left' } }
+  ];
+
+  const fields = [...(footer.fields || defaultFields)]
+    .filter(f => f.visible)
+    .sort((a, b) => a.order - b.order);
+
+  // Group fields by style alignment
+  const leftFields = fields.filter(f => f.styles?.align === 'left' || !f.styles?.align);
+  const centerFields = fields.filter(f => f.styles?.align === 'center');
+  const rightFields = fields.filter(f => f.styles?.align === 'right');
+
+  const renderField = (field: any) => {
+    const s = field.styles || {};
+    const textStyle: React.CSSProperties = {
+      fontFamily: s.fontFamily || 'Times New Roman',
+      fontSize: `${s.fontSize || 8}pt`,
+      color: s.color || '#64748b',
+      fontWeight: s.bold ? 'bold' : 'normal',
+      fontStyle: s.italic ? 'italic' : 'normal',
+      textDecoration: s.underline ? 'underline' : 'none'
+    };
+
+    if (field.type === 'pageNumber') {
+      return (
+        <span style={textStyle} className="page-number-display">
+          Page {pageNum} of {totalPages}
+        </span>
+      );
+    }
+
+    if (field.type === 'qrCode') {
+      const qrSrc = field.value || footer.qrCode;
+      if (!qrSrc) return null;
+      return (
+        <img
+          src={qrSrc}
+          alt="QR Code"
+          style={{ height: '24px', width: '24px', objectFit: 'contain' }}
+          className="inline-block"
+        />
+      );
+    }
+
+    // Default label prefix check
+    const displayVal = field.value;
+    if (!displayVal) return null;
+    const labelPrefix = field.type === 'customText' ? '' : `${field.label}: `;
+    return (
+      <span style={textStyle}>
+        {labelPrefix}{displayVal}
+      </span>
+    );
+  };
+
+  const hasBorder = footer.showBorder !== false;
+  const hasLine = footer.showLine !== false;
+  const bgColor = footer.backgroundColor || '#ffffff';
+
   return (
-    <div className="mt-auto pt-2 border-t border-slate-300 flex justify-between items-center text-[7.5pt] text-slate-500 font-serif w-full break-inside-avoid bg-white document-footer-container">
-      <div className="flex flex-col">
-        {footer.text && <span>{footer.text}</span>}
-        {(footer.website || footer.email) && (
-          <span>
-            {footer.website && `URL: ${footer.website}`}
-            {footer.website && footer.email && ' | '}
-            {footer.email && `Email: ${footer.email}`}
-          </span>
-        )}
-      </div>
-      
-      <div className="flex items-center gap-2">
-        {Object.entries(footer.socials || {}).map(([key, val]) => (
-          val && <span key={key}>{key}: {String(val)}</span>
+    <div 
+      style={{ 
+        backgroundColor: bgColor,
+        paddingTop: '6px',
+        paddingBottom: '6px',
+        paddingLeft: '12px',
+        paddingRight: '12px',
+        borderTop: hasBorder ? '0.25mm solid #000000' : 'none',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        alignItems: 'center',
+        gap: '8px'
+      }} 
+      className="mt-auto flex-shrink-0 w-full break-inside-avoid document-footer-container text-[8pt]"
+    >
+      {/* Left aligned fields */}
+      <div className="flex flex-col gap-1 text-left">
+        {leftFields.map((f, idx) => (
+          <React.Fragment key={f.id}>
+            {idx > 0 && hasLine && <div className="border-t border-slate-200 my-0.5" />}
+            {renderField(f)}
+          </React.Fragment>
         ))}
-        {footer.qrCode && (
-          <img
-            src={footer.qrCode}
-            alt="Footer QR Code"
-            className="w-8 h-8 object-contain"
-          />
-        )}
-        <span className="ml-4 font-semibold text-slate-600">Page {pageNum} of {totalPages}</span>
+      </div>
+
+      {/* Center aligned fields */}
+      <div className="flex flex-col gap-1 text-center items-center">
+        {centerFields.map((f, idx) => (
+          <React.Fragment key={f.id}>
+            {idx > 0 && hasLine && <div className="border-t border-slate-200 my-0.5 w-1/2" />}
+            {renderField(f)}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Right aligned fields */}
+      <div className="flex flex-col gap-1 text-right items-end">
+        {rightFields.map((f, idx) => (
+          <React.Fragment key={f.id}>
+            {idx > 0 && hasLine && <div className="border-t border-slate-200 my-0.5 w-full" />}
+            {renderField(f)}
+          </React.Fragment>
+        ))}
       </div>
     </div>
   );

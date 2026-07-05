@@ -117,6 +117,32 @@ export async function exportToPdf(
   ctx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
   ctx.drawImage(img, 0, 0);
 
+  // ── Pre-Export Validation Checks ───────────────────────────────────────────
+  // 1. Verify that all embedded images loaded successfully
+  const reportImages = Array.from(el.querySelectorAll('img')) as HTMLImageElement[];
+  for (const imgEl of reportImages) {
+    if (imgEl.src && (!imgEl.complete || imgEl.naturalWidth === 0)) {
+      throw new Error(`Render validation failed: Image "${imgEl.alt || 'report graphic'}" failed to load completely. Please wait for the preview to load.`);
+    }
+  }
+
+  // 2. Scan canvas pixel buffer for transparent/blank rendering
+  const testW = Math.min(200, fullCanvas.width);
+  const testH = Math.min(200, fullCanvas.height);
+  if (testW > 0 && testH > 0) {
+    const imgDataSample = ctx.getImageData(0, 0, testW, testH);
+    let allTransparent = true;
+    for (let i = 3; i < imgDataSample.data.length; i += 4) {
+      if (imgDataSample.data[i] !== 0) {
+        allTransparent = false;
+        break;
+      }
+    }
+    if (allTransparent) {
+      throw new Error("Render validation failed: Captured document is blank. Please verify the preview card is rendering content.");
+    }
+  }
+
   onProgress?.('Building PDF pages...');
 
   // ── 4. Create jsPDF ────────────────────────────────────────────────────────
@@ -169,30 +195,40 @@ export async function exportToPdf(
 
     pdf.addImage(imgData, 'JPEG', MARGIN_MM, placementY, CONTENT_W_MM, imgHeightMm, '', 'FAST');
 
-    // Draw page outer border box ONLY on Page 2 onwards, dynamically sized to fit content + 10mm top/bottom gaps
-    if (!isFirstPage) {
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.25);
-      pdf.rect(MARGIN_MM, MARGIN_MM, CONTENT_W_MM, imgHeightMm + GAP_MM * 2, 'S');
+    // Draw page outer border box on all pages
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.25);
 
-      // Draw table vertical column divider (x = 69mm) if this page contains table content
-      const tableBottomPx = trs.length > 0
-        ? Math.round(Math.max(...trs.map(tr => tr.getBoundingClientRect().bottom - elementRect.top)) * SCALE)
-        : 0;
+    const maxBorderHMm = isFirstPage ? (imgHeightMm + GAP_MM) : (imgHeightMm + GAP_MM * 2);
 
-      if (offsetY < tableBottomPx) {
-        const tableEndOnPagePx = Math.min(actualCut, tableBottomPx);
-        const yEndMm = tableBottomPx > actualCut
-          ? (MARGIN_MM + imgHeightMm + GAP_MM * 2)
-          : (placementY + ((tableEndOnPagePx - offsetY) / canvasW) * CONTENT_W_MM);
+    if (isFirstPage) {
+      // Left border: from (15, 15) to (15, 15 + maxBorderHMm)
+      pdf.line(MARGIN_MM, MARGIN_MM, MARGIN_MM, MARGIN_MM + maxBorderHMm);
+      // Right border: from (195, 15) to (195, 15 + maxBorderHMm)
+      pdf.line(MARGIN_MM + CONTENT_W_MM, MARGIN_MM, MARGIN_MM + CONTENT_W_MM, MARGIN_MM + maxBorderHMm);
+      // Bottom border: from (15, 15 + maxBorderHMm) to (195, 15 + maxBorderHMm)
+      pdf.line(MARGIN_MM, MARGIN_MM + maxBorderHMm, MARGIN_MM + CONTENT_W_MM, MARGIN_MM + maxBorderHMm);
+    } else {
+      pdf.rect(MARGIN_MM, MARGIN_MM, CONTENT_W_MM, maxBorderHMm, 'S');
+    }
 
-        pdf.line(
-          MARGIN_MM + CONTENT_W_MM * 0.3, // x = 69 mm
-          MARGIN_MM,                     // start at top border (15mm)
-          MARGIN_MM + CONTENT_W_MM * 0.3, 
-          yEndMm                         // end at bottom page border or table end
-        );
-      }
+    // Draw table vertical column divider (x = 69mm) if this page contains table content
+    const tableBottomPx = trs.length > 0
+      ? Math.round(Math.max(...trs.map(tr => tr.getBoundingClientRect().bottom - elementRect.top)) * SCALE)
+      : 0;
+
+    if (offsetY < tableBottomPx) {
+      const tableEndOnPagePx = Math.min(actualCut, tableBottomPx);
+      const yEndMm = tableBottomPx > actualCut
+        ? (MARGIN_MM + maxBorderHMm)
+        : (placementY + ((tableEndOnPagePx - offsetY) / canvasW) * CONTENT_W_MM);
+
+      pdf.line(
+        MARGIN_MM + CONTENT_W_MM * 0.3, // x = 69 mm
+        MARGIN_MM,                     // start at top border (15mm)
+        MARGIN_MM + CONTENT_W_MM * 0.3, 
+        yEndMm                         // end at bottom page border or table end
+      );
     }
 
     offsetY += sliceH;
