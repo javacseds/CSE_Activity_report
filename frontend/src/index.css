@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Times New Roman", Times, serif;
+}
+
+body {
+  background-color: var(--color-slate-50);
+  color: var(--color-slate-900);
+  transition-property: color, background-color, border-color;
+  transition-duration: 200ms;
+}
+
+body.dark {
+  background-color: var(--color-slate-950);
+  color: var(--color-slate-100);
+}
+
+/* Custom scrollbar for modern aesthetics */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 dark:bg-slate-700 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400 dark:bg-slate-600;
+}
+
+/* A4 Page Preview styling for on-screen visualization */
+.a4-page-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+}
+
+.a4-page {
+  width: 21cm;
+  min-height: 29.7cm;
+  padding: 2cm;
+  margin: 0 auto;
+  background: white;
+  color: black;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  box-sizing: border-box;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  position: relative;
+  overflow: hidden;
+}
+
+.dark .a4-page {
+  background: white; /* Report preview page always remains white for printing accuracy */
+  color: black;
+}
+
+/* Specific report content styling matching Times New Roman 12pt */
+.report-content {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+}
+
+.report-content table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.report-content th, 
+.report-content td {
+  border: 1px solid #000000;
+  padding: 8px 12px;
+  vertical-align: top;
+}
+
+.report-content th {
+  font-weight: bold;
+  text-align: left;
+  background-color: #f3f4f6; /* Subtle grey for header */
+}
+
+/* Report Table Header and Content Formatting */
+.report-table-heading {
+  width: 30%;
+  font-weight: bold;
+  color: #000000;
+}
+
+.report-table-description {
+  width: 70%;
+  text-align: justify;
+}
+
+/* Print CSS Media query to force exact A4 styling */
+@media print {
+  @page {
+    size: A4;
+    margin: 20mm;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  /* Hide dashboard navigation, panels, scrollbars, preview zoom buttons, etc. */
+  .no-print {
+    display: none !important;
+  }
+  
+  .a4-page-container {
+    padding: 0 !important;
+    gap: 0 !important;
+    background: transparent !important;
+  }
+  
+  .a4-page {
+    margin: 0 !important;
+    padding: 0 !important; /* Managed by @page margin */
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 21cm !important;
+    height: auto !important; /* Allow multi-page span */
+    min-height: 29.7cm !important;
+    page-break-after: auto;
+    page-break-inside: auto; /* Let browser break pages naturally */
+  }
+  
+  /* Avoid table row splitting awkwardly */
+  tr {
+    page-break-inside: avoid !important;
+  }
+  
+  img {
+    page-break-inside: avoid !important;
+  }
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.dark .glass {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Page Zoom styles for live preview panel */
+.zoom-75 {
+  transform: scale(0.75);
+  transform-origin: top center;
+}
+.zoom-90 {
+  transform: scale(0.9);
+  transform-origin: top center;
+}
+.zoom-100 {
+  transform: scale(1);
+  transform-origin: top center;
+}
+.zoom-110 {
+  transform: scale(1.10);
+  transform-origin: top center;
+}
+.zoom-125 {
+  transform: scale(1.25);
+  transform-origin: top center;
+}
