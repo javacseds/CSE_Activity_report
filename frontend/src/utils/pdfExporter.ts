@@ -1,4 +1,4 @@
-﻿/**
+/**
  * pdfExporter.ts  –  Multi-page A4 PDF export
  *
  * Page Setup: exactly 1.5 cm (15 mm) margins on all four sides.
@@ -34,25 +34,34 @@ const A4_H_PX   = (A4_H_MM   / MM_PER_IN) * DPI;   // 1122.52 px
 const MARGIN_PX = (MARGIN_MM  / MM_PER_IN) * DPI;   // 56.69 px (≈ 1.5 cm)
 
 const SCALE         = 2;     // 2x for retina-quality output
-const SCAN_RANGE_PX = 180;   // pixels to scan backward for a safe cut (at 2x)
-const WHITE_LEVEL   = 232;   // min RGB channel value to count as "white"
-const WHITE_RATIO   = 0.80;  // fraction of row that must be white for a safe cut
+const SCAN_RANGE_PX = 450;   // pixels to scan backward for a safe cut (at 2x)
+const WHITE_LEVEL   = 240;   // min RGB channel value to count as "white"
+const WHITE_RATIO   = 0.98;  // fraction of row that must be white for a safe cut
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Scan upward from maxY for a row that is ≥ WHITE_RATIO white pixels. */
+/** 
+ * Scan upward from maxY for a row that is ≥ WHITE_RATIO white pixels.
+ * We scan from 35% to 95% of the width to ignore the vertical table borders.
+ */
 function findSafeCutY(
   ctx: CanvasRenderingContext2D,
   canvasW: number,
   maxY: number
 ): number {
+  const startX = Math.floor(canvasW * 0.35);
+  const endX = Math.floor(canvasW * 0.95);
+  const scanW = endX - startX;
+
   for (let y = maxY; y >= Math.max(0, maxY - SCAN_RANGE_PX); y--) {
-    const row = ctx.getImageData(0, y, canvasW, 1).data;
+    const row = ctx.getImageData(startX, y, scanW, 1).data;
     let white = 0;
     for (let i = 0; i < row.length; i += 4) {
-      if (row[i] >= WHITE_LEVEL && row[i + 1] >= WHITE_LEVEL && row[i + 2] >= WHITE_LEVEL) white++;
+      if (row[i] >= WHITE_LEVEL && row[i + 1] >= WHITE_LEVEL && row[i + 2] >= WHITE_LEVEL) {
+        white++;
+      }
     }
-    if (white / canvasW >= WHITE_RATIO) return y;
+    if (white / scanW >= WHITE_RATIO) return y;
   }
   return maxY;
 }
