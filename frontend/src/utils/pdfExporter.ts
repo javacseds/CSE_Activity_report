@@ -1,19 +1,16 @@
 /**
- * pdfExporter.ts  –  Multi-page A4 PDF export
+ * pdfExporter.ts  –  Intelligent multi-page A4 PDF export
  *
- * Page Setup: exactly 1.5 cm (15 mm) margins on all four sides.
+ * Page Setup:
+ *   - Outer border box on every page at (x=15mm, y=15mm, w=180mm, h=267mm).
+ *   - Content placed inside the border with 1 cm (10mm) top and bottom gaps:
+ *     starts at (x=15mm, y=25mm), max usable height of 247mm.
  *
- * How margins are achieved:
- *   - The document is forced to render at exactly 210 mm width (793 px @ 96 dpi).
- *   - 15 mm of padding (56.7 px) is baked INTO the captured image on every side.
- *   - The image is placed at (x=0, y=0) filling the FULL A4 page in jsPDF.
- *   - There are NO extra jsPDF margins — the padding inside the image IS the margin.
- *   This guarantees exactly 1.5 cm on all sides regardless of screen size.
- *
- * Smart page breaks:
- *   After capturing the full-height image, the slicer scans backward from each
- *   candidate cut-line for a mostly-white row, preventing tables or field blocks
- *   from being severed mid-content.
+ * Pagination Engine:
+ *   - Measures DOM element boundaries (table rows, paragraphs, lists, images, signatures).
+ *   - Prevents splitting table rows, images, and signature blocks.
+ *   - Safely breaks between paragraphs or falls back to text-line gaps.
+ *   - Renders at 1:1 scale (no text stretching or scaling down).
  *
  * Library: dom-to-image-more (supports Tailwind v4 oklch colors natively).
  */
@@ -21,34 +18,36 @@
 import domtoimage from 'dom-to-image-more';
 import { jsPDF } from 'jspdf';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const A4_W_MM    = 210;       // A4 page width in mm
-const A4_H_MM    = 297;       // A4 page height in mm
-const MARGIN_MM  = 15;        // 1.5 cm margin on each side
-const DPI        = 96;        // CSS reference pixel density
-const MM_PER_IN  = 25.4;
+// ── Page Geometry (A4, 15mm margins, 10mm top/bottom gaps) ─────────────────────
+const A4_W_MM     = 210;       // A4 page width
+const A4_H_MM     = 297;       // A4 page height
+const MARGIN_MM   = 15;        // 1.5 cm margins on all sides
+const GAP_MM      = 10;        // 1 cm gap inside the border
 
-// Pixel equivalents at 96 dpi
-const A4_W_PX   = (A4_W_MM   / MM_PER_IN) * DPI;   // 793.70 px
-const A4_H_PX   = (A4_H_MM   / MM_PER_IN) * DPI;   // 1122.52 px
-const MARGIN_PX = (MARGIN_MM  / MM_PER_IN) * DPI;   // 56.69 px (≈ 1.5 cm)
+const CONTENT_W_MM = A4_W_MM - MARGIN_MM * 2;                 // 180 mm
+const BORDER_H_MM  = A4_H_MM - MARGIN_MM * 2;                 // 267 mm
+const USABLE_H_MM  = BORDER_H_MM - GAP_MM * 2;                // 247 mm
 
-const SCALE         = 2;     // 2x for retina-quality output
-const SCAN_RANGE_PX = 450;   // pixels to scan backward for a safe cut (at 2x)
-const WHITE_LEVEL   = 240;   // min RGB channel value to count as "white"
-const WHITE_RATIO   = 0.98;  // fraction of row that must be white for a safe cut
+const DPI          = 96;        // Standard CSS reference pixel density
+const MM_PER_IN    = 25.4;
+
+// Pixel equivalents at 96 dpi (at 1x scale)
+const CONTENT_W_PX = (CONTENT_W_MM / MM_PER_IN) * DPI;         // ~680.3 px
+
+const SCALE         = 2;       // 2x scale for print-quality rendering
+const SCAN_RANGE_PX = 400;     // scan up to 400 pixels backward for safe text line gap (at 2x)
+const WHITE_LEVEL   = 242;     // RGB threshold to count as white background
+const WHITE_RATIO   = 0.99;    // Require 99% of scanned text column to be white
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** 
- * Scan upward from maxY for a row that is ≥ WHITE_RATIO white pixels.
- * We scan from 35% to 95% of the width to ignore the vertical table borders.
- */
+/** Scan upward from maxY looking for a safe text line gap (ignoring vertical borders) */
 function findSafeCutY(
   ctx: CanvasRenderingContext2D,
   canvasW: number,
   maxY: number
 ): number {
+  // Scan 35% to 95% of the page width to ignore the table's left/right borders
   const startX = Math.floor(canvasW * 0.35);
   const endX = Math.floor(canvasW * 0.95);
   const scanW = endX - startX;
@@ -66,6 +65,47 @@ function findSafeCutY(
   return maxY;
 }
 
+/**
+ * Intelligent pagination cut selector:
+ *   - Avoids splitting signature blocks, images, or table rows if they fit.
+ *   - Tries to cut at paragraph/list boundaries.
+ *   - Falls back to text line gaps.
+ */
+function getSmartCutY(
+  offsetY: number,
+  pageHPx: number,
+  canvasH: number,
+  boundaries: Array<{ top: number; bottom: number; isUnsplittable: boolean }>,
+  ctx: CanvasRenderingContext2D,
+  canvasW: number
+): number {
+  const candidateCut = offsetY + pageHPx;
+  if (candidateCut >= canvasH) return canvasH;
+
+  // Find all blocks crossing the candidate cut line
+  const crossing = boundaries.filter(
+    b => b.top < candidateCut && b.bottom > candidateCut
+  );
+
+  if (crossing.length > 0) {
+    // Sort by height (smallest first) to prioritize paragraph breaks over table row breaks
+    crossing.sort((a, b) => (a.bottom - a.top) - (b.bottom - b.top));
+
+    for (const block of crossing) {
+      const targetCut = block.top - 2; // slice 2px above block
+      const pageHeightWithCut = targetCut - offsetY;
+
+      // Force push unsplittable items (images, signatures), or split if we preserve >= 45% fill
+      if (block.isUnsplittable || pageHeightWithCut >= pageHPx * 0.45) {
+        return targetCut;
+      }
+    }
+  }
+
+  // Fallback to text line pixel scanner
+  return findSafeCutY(ctx, canvasW, candidateCut);
+}
+
 // ── Main export function ──────────────────────────────────────────────────────
 
 export async function exportToPdf(
@@ -77,27 +117,55 @@ export async function exportToPdf(
 
   onProgress?.('Preparing document...');
 
-  // Full scroll height of the document (content may exceed one screen)
-  const contentHeight = Math.max(el.scrollHeight, el.offsetHeight, 400);
+  // ── 1. Measure element boundaries in the live DOM first ────────────────────
+  const elementRect = el.getBoundingClientRect();
 
-  // Total capture height = content + top/bottom padding
-  const captureH = contentHeight + MARGIN_PX * 2;
+  // Query block elements to avoid splitting
+  const trs = Array.from(el.querySelectorAll('tr'));
+  const paras = Array.from(el.querySelectorAll('.report-table-description p, .report-table-description li'));
+  const imgs = Array.from(el.querySelectorAll('.photo-gallery-grid img'));
+  const sigs = Array.from(el.querySelectorAll('.signatures-section-container, .signature-block-container'));
+  const footer = Array.from(el.querySelectorAll('.document-footer-container'));
+
+  const boundaries: Array<{ top: number; bottom: number; isUnsplittable: boolean }> = [];
+
+  const addBoundary = (elements: Element[], isUnsplittable = false) => {
+    elements.forEach(item => {
+      const r = item.getBoundingClientRect();
+      const relativeTop = r.top - elementRect.top;
+      const relativeBottom = r.bottom - elementRect.top;
+      boundaries.push({
+        top: Math.round(relativeTop * SCALE),
+        bottom: Math.round(relativeBottom * SCALE),
+        isUnsplittable
+      });
+    });
+  };
+
+  addBoundary(trs, false);
+  addBoundary(paras, false);
+  addBoundary(imgs, true);   // never split images
+  addBoundary(sigs, true);   // never split signatures
+  addBoundary(footer, true); // never split footer
+
+  // Sort boundaries ascending for scanning
+  boundaries.sort((a, b) => a.top - b.top);
+
+  // Full height of the content
+  const contentHeight = Math.max(el.scrollHeight, el.offsetHeight, 400);
 
   onProgress?.('Capturing content...');
 
-  // ── Capture at exactly A4 width with 1.5cm padding baked in ─────────────
-  // We override:
-  //   width   → 210mm (793px) so content fills the full page
-  //   padding → 15mm (56.7px) on all sides — these become the PDF margins
-  //   height  → full content height + top/bottom padding
+  // ── 2. Capture pure content at exactly 180mm width (zero margins) ──────────
+  // Margins (15mm) and gaps (10mm) will be drawn dynamically in jsPDF.
   const pngDataUrl: string = await (domtoimage as any).toPng(el, {
     bgcolor: '#ffffff',
-    width  : A4_W_PX,
-    height : captureH,
+    width  : CONTENT_W_PX,
+    height : contentHeight,
     style  : {
-      width          : `${A4_W_PX}px`,
-      minHeight      : `${captureH}px`,
-      padding        : `${MARGIN_PX}px`,
+      width          : `${CONTENT_W_PX}px`,
+      minHeight      : `${contentHeight}px`,
+      padding        : '0',
       margin         : '0',
       boxSizing      : 'border-box',
       transform      : 'none',
@@ -111,7 +179,7 @@ export async function exportToPdf(
 
   onProgress?.('Analysing layout...');
 
-  // ── Decode PNG → canvas ───────────────────────────────────────────────────
+  // ── 3. Decode PNG → canvas ─────────────────────────────────────────────────
   const img = new Image();
   await new Promise<void>((resolve, reject) => {
     img.onload  = () => resolve();
@@ -129,7 +197,7 @@ export async function exportToPdf(
 
   onProgress?.('Building PDF pages...');
 
-  // ── Create jsPDF ─────────────────────────────────────────────────────────
+  // ── 4. Create jsPDF ────────────────────────────────────────────────────────
   const pdf = new jsPDF({
     orientation: 'portrait',
     unit       : 'mm',
@@ -137,11 +205,11 @@ export async function exportToPdf(
     compress   : true,
   });
 
-  const canvasW = fullCanvas.width;   // A4_W_PX * SCALE = ~1587 px
+  const canvasW = fullCanvas.width;
   const canvasH = fullCanvas.height;
 
-  // One A4 page in canvas pixels (full page height at 2x scale)
-  const pageHPx = Math.round((A4_H_PX / A4_W_PX) * canvasW);
+  // Max usable height per page in canvas pixels
+  const pageHPx = Math.round((USABLE_H_MM / CONTENT_W_MM) * canvasW);
 
   let offsetY = 0;
   let pageNum = 0;
@@ -150,16 +218,8 @@ export async function exportToPdf(
     if (pageNum > 0) pdf.addPage();
     pageNum++;
 
-    const candidateCut = offsetY + pageHPx;
-
-    let actualCut: number;
-    if (candidateCut >= canvasH) {
-      actualCut = canvasH;
-    } else {
-      actualCut = findSafeCutY(ctx, canvasW, candidateCut);
-      if (actualCut <= offsetY) actualCut = candidateCut;
-    }
-
+    // Select the optimal cut coordinate
+    const actualCut = getSmartCutY(offsetY, pageHPx, canvasH, boundaries, ctx, canvasW);
     const sliceH = actualCut - offsetY;
 
     // Draw slice onto temporary canvas
@@ -173,18 +233,14 @@ export async function exportToPdf(
 
     const imgData = pageCanvas.toDataURL('image/jpeg', 0.93);
 
-    // Place at full page width (x=0, y=0) — margins are INSIDE the image
-    // sliceH / canvasW gives the aspect ratio; multiply by A4_W_MM for mm height
-    const imgHeightMm = (sliceH / canvasW) * A4_W_MM;
+    // Place content inside margins: x=15mm, y=25mm (15mm margin + 10mm top gap)
+    const imgHeightMm = (sliceH / canvasW) * CONTENT_W_MM;
+    pdf.addImage(imgData, 'JPEG', MARGIN_MM, MARGIN_MM + GAP_MM, CONTENT_W_MM, imgHeightMm, '', 'FAST');
 
-    pdf.addImage(
-      imgData, 'JPEG',
-      0, 0,           // x=0, y=0 — no extra jsPDF margins (margins are baked in)
-      A4_W_MM,        // fill full 210mm page width
-      imgHeightMm,    // proportional height
-      '',
-      'FAST'
-    );
+    // Draw page outer border box on all pages (x=15mm, y=15mm, w=180mm, h=267mm)
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.25);
+    pdf.rect(MARGIN_MM, MARGIN_MM, CONTENT_W_MM, BORDER_H_MM, 'S');
 
     offsetY += sliceH;
     onProgress?.(`Page ${pageNum} done...`);
