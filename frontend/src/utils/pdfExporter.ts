@@ -35,7 +35,7 @@ const MM_PER_IN    = 25.4;
 const CONTENT_W_PX = (CONTENT_W_MM / MM_PER_IN) * DPI;         // ~680.3 px
 
 const SCALE         = 2;       // 2x scale for print-quality rendering
-const SCAN_RANGE_PX = 400;     // scan up to 400 pixels backward for safe text line gap (at 2x)
+const SCAN_RANGE_PX = 300;     // scan up to 300 pixels backward for safe text line gap (at 2x)
 const WHITE_LEVEL   = 242;     // RGB threshold to count as white background
 const WHITE_RATIO   = 0.99;    // Require 99% of scanned text column to be white
 
@@ -257,11 +257,11 @@ export async function exportToPdf(
 
     pdf.addImage(imgData, 'JPEG', MARGIN_MM, placementY, CONTENT_W_MM, imgHeightMm, '', 'FAST');
 
-    // Draw page outer border box ONLY on Page 2 onwards (x=15mm, y=15mm, w=180mm, h=267mm)
+    // Draw page outer border box ONLY on Page 2 onwards, dynamically sized to fit content + 10mm top/bottom gaps
     if (!isFirstPage) {
       pdf.setDrawColor(0, 0, 0);
       pdf.setLineWidth(0.25);
-      pdf.rect(MARGIN_MM, MARGIN_MM, CONTENT_W_MM, BORDER_H_MM, 'S');
+      pdf.rect(MARGIN_MM, MARGIN_MM, CONTENT_W_MM, imgHeightMm + GAP_MM * 2, 'S');
     }
 
     offsetY += sliceH;
